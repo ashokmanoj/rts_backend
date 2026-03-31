@@ -13,7 +13,7 @@ const PORT = process.env.PORT || 5000;
 
 // ── Middleware ────────────────────────────────────────────────
 app.use(cors({
-  origin:      process.env.CLIENT_URL || "http://localhost:5173",
+  origin: true,   // allow all origins
   credentials: true,
 }));
 app.use(express.json());
@@ -34,6 +34,12 @@ app.get("/api/health", (_req, res) =>
 
 // ── 404 ───────────────────────────────────────────────────────
 app.use((_req, res) => res.status(404).json({ error: "Route not found." }));
+
+//DB connection test
+const pool = require("./db/pool");
+pool.query("SELECT NOW()")
+  .then(result => console.log("Database connected:", result.rows[0].now))
+  .catch(err => console.error("Database connection error:", err.message));
 
 // ── Global error handler ──────────────────────────────────────
 app.use(errorHandler);
