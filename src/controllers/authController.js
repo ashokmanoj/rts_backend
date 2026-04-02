@@ -1,43 +1,58 @@
-const bcrypt = require("bcryptjs");
-const jwt    = require("jsonwebtoken");
-const pool   = require("../db/pool");
+/**
+ * src/controllers/authController.js
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Handles user authentication:
+ *   POST /api/auth/login   → validate credentials, return JWT + user payload
+ *   GET  /api/auth/me      → return decoded JWT payload (no extra DB hit)
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+
+"use strict";
+
+const bcrypt  = require("bcryptjs");
+const jwt     = require("jsonwebtoken");
+const prisma  = require("../db/prisma");
 
 /**
  * POST /api/auth/login
  * Body: { email, password }
- * Returns: { token, user }
+ * Returns: { token, user: { userId, empId, name, role, dept } }
  */
 async function login(req, res, next) {
   try {
     const { email, password } = req.body;
+
+    // ── Input validation ────────────────────────────────────────────────────
     if (!email || !password) {
       return res.status(400).json({ error: "Email and password are required." });
     }
 
-    // Find user
-    const result = await pool.query(
-      "SELECT * FROM users WHERE email = $1",
-      [email.trim().toLowerCase()]
-    );
-    const user = result.rows[0];
+    // ── Find user by email (case-insensitive) ───────────────────────────────
+    const user = await prisma.user.findUnique({
+      where: { email: email.trim().toLowerCase() },
+    });
+
     if (!user) {
       return res.status(401).json({ error: "Invalid credentials." });
     }
 
-    // Verify password
-    const match = await bcrypt.compare(password, user.password_hash);
+    // ── Verify password ─────────────────────────────────────────────────────
+    const match = await bcrypt.compare(password, user.passwordHash);
     if (!match) {
       return res.status(401).json({ error: "Invalid credentials." });
     }
 
-    // Sign JWT
+    // ── Build JWT payload ───────────────────────────────────────────────────
+    // Note: we use `userId` (UUID) for internal reference; `empId` (e.g. AC-1030)
+    // is the business identifier used in request records and chat messages.
     const payload = {
-      userId: user.id,   // user UUID — renamed to avoid clash with request.id
-      empId:  user.emp_id,
-      name:  user.name,
-      role:  user.role,
-      dept:  user.dept,
+      userId: user.id,
+      empId:  user.empId,
+      name:   user.name,
+      role:   user.role,
+      dept:   user.dept,
     };
+
     const token = jwt.sign(payload, process.env.JWT_SECRET, {
       expiresIn: process.env.JWT_EXPIRES_IN || "7d",
     });
@@ -50,7 +65,8 @@ async function login(req, res, next) {
 
 /**
  * GET /api/auth/me
- * Returns logged-in user info from JWT (no DB hit needed).
+ * No DB hit — returns the user object already decoded from the JWT.
+ * The `authenticate` middleware attaches req.user before this runs.
  */
 function me(req, res) {
   res.json({ user: req.user });

@@ -1,7 +1,21 @@
-const pool    = require("../db/pool");
-const { formatMessage } = require("../utils/formatters");
+/**
+ * src/controllers/chatController.js
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Chat messages nested under each request.
+ *
+ * Routes (all require JWT via authenticate middleware):
+ *   GET  /api/requests/:id/chat  → getMessages
+ *   POST /api/requests/:id/chat  → sendMessage  (multipart — optional file)
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
 
-const fileUrl = (req, filename) => {
+"use strict";
+
+const prisma              = require("../db/prisma");
+const { formatMessage }   = require("../utils/formatters");
+
+/** Build absolute URL for an uploaded file. */
+const buildFileUrl = (req, filename) => {
   if (!filename) return null;
   const base = process.env.SERVER_URL
     ? process.env.SERVER_URL.replace(/\/$/, "")
@@ -9,91 +23,97 @@ const fileUrl = (req, filename) => {
   return `${base}/uploads/${filename}`;
 };
 
-/**
- * GET /api/requests/:id/chat
- */
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/requests/:id/chat
+// Returns all messages for a request in chronological order.
+// ─────────────────────────────────────────────────────────────────────────────
 async function getMessages(req, res, next) {
   try {
-    // Verify request exists
-    const reqCheck = await pool.query(
-      "SELECT id FROM requests WHERE id = $1", [req.params.id]
-    );
-    if (!reqCheck.rows.length) {
-      return res.status(404).json({ error: "Request not found." });
-    }
+    const reqId = Number(req.params.id);
 
-    const result = await pool.query(
-      `SELECT * FROM chat_messages WHERE request_id = $1 ORDER BY created_at ASC`,
-      [req.params.id]
-    );
-    res.json(result.rows.map(formatMessage));
+    // Verify request exists
+    const reqExists = await prisma.request.findUnique({ where: { id: reqId } });
+    if (!reqExists) return res.status(404).json({ error: "Request not found." });
+
+    const messages = await prisma.chatMessage.findMany({
+      where:   { requestId: reqId },
+      orderBy: { createdAt: "asc" },
+    });
+
+    res.json(messages.map(formatMessage));
   } catch (err) { next(err); }
 }
 
-/**
- * POST /api/requests/:id/chat
- * FIX: Only sets seen=FALSE for OTHER users, not the sender.
- * The backend sets seen=FALSE on the request so other users see the "unread" badge.
- * The sender should NOT see their own message as creating an unread item for themselves.
- * NOTE: We still set it globally — the frontend filters this by checking currentUser.
- * Blocked if ticket is already closed.
- */
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/requests/:id/chat
+// Accepts text JSON or multipart (file / voice attachment).
+// Blocked if the ticket is already closed.
+// ─────────────────────────────────────────────────────────────────────────────
 async function sendMessage(req, res, next) {
   try {
-    const reqId = Number(req.params.id);
-    const user  = req.user;
-    const body  = req.body;
+    const reqId        = Number(req.params.id);
+    const user         = req.user;
+    const body         = req.body;
     const uploadedFile = req.file;
 
-    // Block chat on closed tickets
-    const check = await pool.query(
-      "SELECT is_closed FROM requests WHERE id = $1", [reqId]
-    );
-    if (!check.rows.length) {
-      return res.status(404).json({ error: "Request not found." });
-    }
-    if (check.rows[0].is_closed) {
+    // ── Check ticket exists and is open ─────────────────────────────────────
+    const request = await prisma.request.findUnique({ where: { id: reqId } });
+    if (!request)         return res.status(404).json({ error: "Request not found." });
+    if (request.isClosed) {
       return res.status(403).json({ error: "Ticket is closed. Chat is disabled." });
     }
 
+    // ── Parse message fields ─────────────────────────────────────────────────
     const type         = body.type || "message";
     const text         = body.text || "";
-    const fUrl         = uploadedFile ? fileUrl(req, uploadedFile.filename) : null;
-    const fName        = uploadedFile ? uploadedFile.originalname            : null;
-    const isImg        = uploadedFile ? uploadedFile.mimetype.startsWith("image/") : false;
-    const voiceUrl     = (type === "voice" && uploadedFile) ? fUrl  : null;
-    const fileUrlVal   = (type !== "voice" && uploadedFile) ? fUrl  : null;
-    const fileNameVal  = (type !== "voice" && uploadedFile) ? fName : null;
-    const duration     = body.duration     || null;
-    const status       = body.status       || null;
-    const purpose      = body.purpose      || null;
-    const changedDept  = body.changedDept  || null;
-    const originalDept = body.originalDept || null;
 
-    // Validate: file/voice types must have a file attached
-    if ((type === "file" || type === "voice" || type === "mixed") && !uploadedFile) {
-      return res.status(400).json({ error: `A file is required for type '${type}'.` });
+    // Route file URL to correct field based on message type
+    const rawUrl       = uploadedFile ? buildFileUrl(req, uploadedFile.filename) : null;
+    const rawName      = uploadedFile ? uploadedFile.originalname                : null;
+    const isImg        = uploadedFile
+      ? uploadedFile.mimetype.startsWith("image/")
+      : false;
+
+    // Voice messages use voiceUrl; all other types use fileUrl
+    const voiceUrl     = type === "voice"                              ? rawUrl  : null;
+    const fileUrl      = type !== "voice" && uploadedFile             ? rawUrl  : null;
+    const fileName     = type !== "voice" && uploadedFile             ? rawName : null;
+
+    // ── Validate: file/voice types must have an actual file ──────────────────
+    if (["file", "voice", "mixed"].includes(type) && !uploadedFile) {
+      return res.status(400).json({
+        error: `A file is required for message type '${type}'.`,
+      });
     }
 
-    // Mark request unseen (for other users to notice new activity)
-    await pool.query("UPDATE requests SET seen = FALSE WHERE id = $1", [reqId]);
+    // ── Mark request unseen so other users notice new activity ───────────────
+    await prisma.request.update({
+      where: { id: reqId },
+      data:  { seen: false },
+    });
 
-    const result = await pool.query(`
-      INSERT INTO chat_messages
-        (request_id, author, role, type, text,
-         file_url, file_name, is_image,
-         voice_url, duration,
-         status, purpose, changed_dept, original_dept)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
-      RETURNING *
-    `, [
-      reqId, user.name, user.role, type, text,
-      fileUrlVal, fileNameVal, isImg,
-      voiceUrl, duration,
-      status, purpose, changedDept, originalDept,
-    ]);
+    // ── Persist the message ──────────────────────────────────────────────────
+    const message = await prisma.chatMessage.create({
+      data: {
+        requestId:   reqId,
+        authorId:    user.empId,
+        author:      user.name,
+        role:        user.role,
+        type,
+        text,
+        fileUrl,
+        fileName,
+        isImage:     isImg,
+        voiceUrl,
+        duration:    body.duration     || null,
+        status:      body.status       || null,
+        purpose:     body.purpose      || null,
+        changedDept: body.changedDept  || null,
+        originalDept:body.originalDept || null,
+      },
+    });
 
-    res.status(201).json(formatMessage(result.rows[0]));
+    res.status(201).json(formatMessage(message));
   } catch (err) { next(err); }
 }
 

@@ -1,0 +1,115 @@
+// =============================================================================
+// prisma/schema.prisma — RTS (Request Tracking System)
+// =============================================================================
+// SETUP STEPS (run once):
+//   1. npm install
+//   2. npx prisma generate          ← compile Prisma Client
+//   3. npx prisma db push           ← push schema to PostgreSQL
+//   4. node src/db/seed.js          ← seed all users
+//
+// DATABASE_URL in .env:
+//   DATABASE_URL="postgresql://postgres:PASSWORD@localhost:5432/rts?schema=public"
+// =============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  Requestor
+  RM
+  HOD
+  DeptHOD
+  Admin
+}
+
+enum MessageType {
+  message
+  file
+  voice
+  mixed
+  approval
+  system
+}
+
+model User {
+  id           String   @id @default(uuid())
+  empId        String   @unique @map("emp_id")
+  name         String
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  role         Role     @default(Requestor)
+  dept         String
+  designation  String?
+  location     String?
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  requests     Request[]     @relation("RequestOwner")
+  messages     ChatMessage[] @relation("MessageSender")
+
+  @@map("users")
+}
+
+model Request {
+  id             Int       @id @default(autoincrement())
+  empId          String    @map("emp_id")
+  purpose        String
+  description    String?
+  fileUrl        String?   @map("file_url")
+  fileName       String?   @map("file_name")
+  dept           String
+  assignedDept   String    @map("assigned_dept")
+  rmStatus       String    @default("--") @map("rm_status")
+  rmDate         DateTime? @map("rm_date")
+  hodStatus      String    @default("--") @map("hod_status")
+  hodDate        DateTime? @map("hod_date")
+  deptHodStatus  String    @default("--") @map("dept_hod_status")
+  deptHodDate    DateTime? @map("dept_hod_date")
+  forwarded      Boolean   @default(false)
+  forwardedBy    String?   @map("forwarded_by")
+  forwardedAt    DateTime? @map("forwarded_at")
+  assignedStatus String    @default("Open") @map("assigned_status")
+  isClosed       Boolean   @default(false) @map("is_closed")
+  resolvedDate   DateTime? @map("resolved_date")
+  resolvedBy     String?   @default("-") @map("resolved_by")
+  seen           Boolean   @default(true)
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  owner        User          @relation("RequestOwner", fields: [empId], references: [empId])
+  chatMessages ChatMessage[]
+
+  @@index([empId])
+  @@index([assignedDept])
+  @@map("requests")
+}
+
+model ChatMessage {
+  id           Int         @id @default(autoincrement())
+  requestId    Int         @map("request_id")
+  authorId     String      @map("author_id")
+  author       String
+  role         String
+  type         MessageType @default(message)
+  text         String?     @default("")
+  fileUrl      String?     @map("file_url")
+  fileName     String?     @map("file_name")
+  isImage      Boolean     @default(false) @map("is_image")
+  voiceUrl     String?     @map("voice_url")
+  duration     String?
+  status       String?
+  purpose      String?
+  changedDept  String?     @map("changed_dept")
+  originalDept String?     @map("original_dept")
+  createdAt    DateTime    @default(now()) @map("created_at")
+
+  request  Request @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  sender   User    @relation("MessageSender", fields: [authorId], references: [empId])
+
+  @@index([requestId])
+  @@map("chat_messages")
+}

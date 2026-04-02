@@ -1,8 +1,32 @@
-const pool    = require("../db/pool");
+/**
+ * src/controllers/requestController.js
+ * ─────────────────────────────────────────────────────────────────────────────
+ * All CRUD operations on Request records.
+ *
+ * FIX 1 — Correct role-based filtering (was showing all requests to everyone):
+ *   RM / HOD  → see requests WHERE the REQUESTOR (owner) belongs to their dept
+ *               + their own submissions
+ *   DeptHOD   → see requests WHERE assignedDept = their dept + their own
+ *   Requestor → only their own requests
+ *   Admin     → all requests
+ *
+ * FIX 2 — RM/HOD/DeptHOD creating a request always uses user.dept:
+ *   The 'dept' field on a request is ALWAYS the owner's department.
+ *   We ignore req.body.dept and always use user.dept from the JWT.
+ *
+ * FIX 3 — Response includes ownerDept separately:
+ *   formatRequest now exposes ownerDept so the frontend can always show
+ *   the REQUESTOR's real department regardless of request.dept.
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+
+"use strict";
+
+const prisma            = require("../db/prisma");
 const { formatRequest } = require("../utils/formatters");
 
-// Build absolute file URL accessible from the frontend
-const fileUrl = (req, filename) => {
+/** Build absolute URL for an uploaded file. */
+const buildFileUrl = (req, filename) => {
   if (!filename) return null;
   const base = process.env.SERVER_URL
     ? process.env.SERVER_URL.replace(/\/$/, "")
@@ -10,235 +34,222 @@ const fileUrl = (req, filename) => {
   return `${base}/uploads/${filename}`;
 };
 
-const nowISO = () => new Date().toISOString();
+/** Always join the request owner so we can filter and display correctly. */
+const WITH_OWNER = { owner: true };
 
-/**
- * GET /api/requests
- * Returns requests filtered by role:
- *   Employee  → own requests only
- *   RM / HOD  → own dept requests + own submissions
- *   DeptHOD   → assigned to their dept + own submissions
- *   Admin     → everything
- */
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/requests
+//
+// FIX: The old filter used { dept: userDept } which matched request.dept
+// (the dept stored on the request row). This broke because:
+//   - When an RM creates a request, request.dept was set from req.body.dept
+//     which might be any department, not necessarily the RM's own dept
+//   - The Prisma query { dept: userDept } hit the request table's dept column,
+//     not the owner's dept — so it was inconsistent
+//
+// NEW LOGIC: Join owner and filter on owner.dept so we always check the
+// ACTUAL department of the person who submitted the request.
+// ─────────────────────────────────────────────────────────────────────────────
 async function getAll(req, res, next) {
   try {
     const { role, empId, dept } = req.user;
 
-    let whereClause = "";
-    let values      = [];
+    let where = {};
 
-    if (role === "Employee") {
-      whereClause = "WHERE r.emp_id = $1";
-      values      = [empId];
+    if (role === "Requestor") {
+      // Requestors see ONLY their own requests
+      where = { empId };
+
     } else if (role === "RM" || role === "HOD") {
-      whereClause = "WHERE (r.dept = $1 OR r.emp_id = $2)";
-      values      = [dept, empId];
+      // RM/HOD see requests from people in their department
+      // We join the owner relation and filter by owner.dept
+      // PLUS they always see their own submissions regardless of dept
+      where = {
+        OR: [
+          {
+            // Requests submitted by anyone whose dept = this RM/HOD's dept
+            owner: { dept }
+          },
+          {
+            // Their own submissions (in case they submitted to a different dept)
+            empId
+          }
+        ]
+      };
+
     } else if (role === "DeptHOD") {
-      whereClause = "WHERE (r.assigned_dept = $1 OR r.emp_id = $2)";
-      values      = [dept, empId];
+      // DeptHOD sees requests ASSIGNED to their department
+      // PLUS their own submissions
+      where = {
+        OR: [
+          { assignedDept: dept },
+          { empId }
+        ]
+      };
+
     }
-    // Admin — no filter, sees everything
+    // Admin: no where clause — sees ALL requests
 
-    const result = await pool.query(`
-      SELECT
-        r.id,
-        r.emp_id,
-        r.purpose,
-        r.description,
-        r.file_url,
-        r.file_name,
-        r.dept,
-        r.assigned_dept,
-        r.rm_status,
-        r.rm_date,
-        r.hod_status,
-        r.hod_date,
-        r.dept_hod_status,
-        r.dept_hod_date,
-        r.forwarded,
-        r.forwarded_by,
-        r.forwarded_at,
-        r.assigned_status,
-        r.is_closed,
-        r.resolved_date,
-        r.resolved_by,
-        r.seen,
-        r.created_at,
-        u.name,
-        u.designation,
-        u.location
-      FROM   requests r
-      JOIN   users    u ON u.emp_id = r.emp_id
-      ${whereClause}
-      ORDER  BY r.created_at DESC
-    `, values);
+    const requests = await prisma.request.findMany({
+      where,
+      include: WITH_OWNER,
+      orderBy: { createdAt: "desc" },
+    });
 
-    res.json(result.rows.map(formatRequest));
+    res.json(requests.map((r) => formatRequest(r, empId)));
   } catch (err) { next(err); }
 }
 
-/**
- * POST /api/requests  (multipart: purpose, dept, description, file?)
- */
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/requests
+//
+// FIX: Always use user.dept from the JWT as the request's dept.
+// This ensures:
+//   - The "Dept" column in the table always shows the REQUESTOR's real dept
+//   - RM/HOD/DeptHOD who submit requests are correctly filtered by their dept
+//   - Mobile app and web see consistent data
+//
+// The body's 'dept' is used ONLY for assignedDept (which dept should handle it).
+// If body.assignedDept is not provided, it defaults to user.dept.
+// ─────────────────────────────────────────────────────────────────────────────
 async function create(req, res, next) {
   try {
-    const { purpose, dept, description } = req.body;
-    if (!purpose || !dept) {
-      return res.status(400).json({ error: "purpose and dept are required." });
-    }
-
+    const { purpose, description, assignedDept } = req.body;
     const user         = req.user;
     const uploadedFile = req.file;
 
-    const result = await pool.query(`
-      INSERT INTO requests
-        (emp_id, purpose, description, file_url, file_name, dept, assigned_dept)
-      VALUES ($1,$2,$3,$4,$5,$6,$6)
-      RETURNING *
-    `, [
-      user.empId,
-      purpose,
-      description || "",
-      uploadedFile ? fileUrl(req, uploadedFile.filename) : null,
-      uploadedFile ? uploadedFile.originalname            : null,
-      dept,
-    ]);
+    if (!purpose) {
+      return res.status(400).json({ error: "purpose is required." });
+    }
 
-    const userRow = await pool.query(
-      "SELECT name, designation, location FROM users WHERE emp_id = $1", [user.empId]
-    );
-    const row = { ...result.rows[0], ...userRow.rows[0] };
-    res.status(201).json(formatRequest(row));
+    const request = await prisma.request.create({
+      data: {
+        empId:        user.empId,
+        purpose,
+        description:  description || "",
+        fileUrl:      uploadedFile ? buildFileUrl(req, uploadedFile.filename) : null,
+        fileName:     uploadedFile ? uploadedFile.originalname                : null,
+        // dept is ALWAYS the submitting user's own department from JWT
+        dept:         user.dept,
+        // assignedDept = where the request is routed to (defaults to own dept)
+        assignedDept: assignedDept || user.dept,
+        // seen=false so RM/HOD/DeptHOD see the blue "unread" highlight.
+        // The frontend overrides this to seen=true for the CREATOR only,
+        // so the requestor doesn't see their own new request highlighted.
+        seen:         false,
+      },
+      include: WITH_OWNER,
+    });
+
+    res.status(201).json(formatRequest(request, user.empId));
   } catch (err) { next(err); }
 }
 
-/**
- * PATCH /api/requests/:id/approval
- * Step 1 — RM:      sets rm_status
- * Step 2 — HOD:     sets hod_status
- * Step 3 — DeptHOD: sets dept_hod_status
- * Any role — Forwarded: updates assigned_dept
- */
+// ─────────────────────────────────────────────────────────────────────────────
+// PATCH /api/requests/:id/approval
+// ─────────────────────────────────────────────────────────────────────────────
 async function approval(req, res, next) {
   try {
-    const reqId    = Number(req.params.id);
+    const reqId = Number(req.params.id);
     const { decision, comment, newDept } = req.body;
-    const user     = req.user;
-    const now      = nowISO();
+    const user  = req.user;
+    const now   = new Date();
 
     if (!decision) {
       return res.status(400).json({ error: "decision is required." });
     }
-
-    const allowed = ["Approved", "Rejected", "Checking", "Forwarded"];
-    if (!allowed.includes(decision)) {
-      return res.status(400).json({ error: `decision must be one of: ${allowed.join(", ")}` });
+    const ALLOWED = ["Approved", "Rejected", "Checking", "Forwarded"];
+    if (!ALLOWED.includes(decision)) {
+      return res.status(400).json({ error: `decision must be one of: ${ALLOWED.join(", ")}` });
     }
 
-    // Check request exists and is not already closed
-    const check = await pool.query(
-      "SELECT id, is_closed, purpose, assigned_dept FROM requests WHERE id = $1",
-      [reqId]
-    );
-    if (!check.rows.length) {
-      return res.status(404).json({ error: "Request not found." });
-    }
-    if (check.rows[0].is_closed) {
+    const existing = await prisma.request.findUnique({ where: { id: reqId } });
+    if (!existing) return res.status(404).json({ error: "Request not found." });
+    if (existing.isClosed) {
       return res.status(403).json({ error: "Cannot update a closed ticket." });
     }
 
-    let setClauses = [];
-    let values     = [];
-    let idx        = 1;
+    let updateData = { seen: false };
 
     if (decision === "Forwarded") {
       if (!newDept) {
         return res.status(400).json({ error: "newDept is required when forwarding." });
       }
-      setClauses.push(`forwarded = TRUE`, `forwarded_by = $${idx++}`, `forwarded_at = $${idx++}`, `assigned_dept = $${idx++}`);
-      values.push(user.name, now, newDept);
+      updateData = {
+        ...updateData,
+        forwarded:    true,
+        forwardedBy:  user.name,
+        forwardedAt:  now,
+        assignedDept: newDept,
+      };
     } else if (user.role === "RM") {
-      setClauses.push(`rm_status = $${idx++}`, `rm_date = $${idx++}`);
-      values.push(decision, now);
+      updateData = { ...updateData, rmStatus: decision, rmDate: now };
     } else if (user.role === "HOD") {
-      setClauses.push(`hod_status = $${idx++}`, `hod_date = $${idx++}`);
-      values.push(decision, now);
+      updateData = { ...updateData, hodStatus: decision, hodDate: now };
     } else if (user.role === "DeptHOD") {
-      setClauses.push(`dept_hod_status = $${idx++}`, `dept_hod_date = $${idx++}`);
-      values.push(decision, now);
+      updateData = { ...updateData, deptHodStatus: decision, deptHodDate: now };
     } else if (user.role === "Admin") {
       return res.status(403).json({ error: "Admin has read-only access." });
     } else {
       return res.status(403).json({ error: "Your role cannot approve requests." });
     }
 
-    setClauses.push(`seen = FALSE`);
-    values.push(reqId);
+    const updated = await prisma.request.update({
+      where:   { id: reqId },
+      data:    updateData,
+      include: WITH_OWNER,
+    });
 
-    const sql = `
-      UPDATE requests
-      SET    ${setClauses.join(", ")}
-      WHERE  id = $${idx}
-      RETURNING *
-    `;
-    const result = await pool.query(sql, values);
+    await prisma.chatMessage.create({
+      data: {
+        requestId:    reqId,
+        authorId:     user.empId,
+        author:       user.name,
+        role:         user.role,
+        type:         "approval",
+        text:         comment || `${decision} the request.`,
+        status:       decision,
+        purpose:      updated.purpose,
+        changedDept:  decision === "Forwarded" ? newDept : null,
+        originalDept: existing.assignedDept,
+      },
+    });
 
-    // Log approval card in chat
-    await pool.query(`
-      INSERT INTO chat_messages
-        (request_id, author, role, type, text, status, purpose, changed_dept, original_dept)
-      VALUES ($1,$2,$3,'approval',$4,$5,$6,$7,$8)
-    `, [
-      reqId,
-      user.name,
-      user.role,
-      comment || `${decision} the request.`,
-      decision,
-      result.rows[0].purpose,
-      decision === "Forwarded" ? newDept : null,
-      check.rows[0].assigned_dept,
-    ]);
-
-    const userRow = await pool.query(
-      "SELECT name, designation, location FROM users WHERE emp_id = $1",
-      [result.rows[0].emp_id]
-    );
-    res.json(formatRequest({ ...result.rows[0], ...userRow.rows[0] }));
+    res.json(formatRequest(updated, user.empId));
   } catch (err) { next(err); }
 }
 
-/**
- * PATCH /api/requests/:id/seen
- */
+// ─────────────────────────────────────────────────────────────────────────────
+// PATCH /api/requests/:id/seen
+// ─────────────────────────────────────────────────────────────────────────────
 async function markSeen(req, res, next) {
   try {
-    const result = await pool.query(
-      "UPDATE requests SET seen = TRUE WHERE id = $1 RETURNING id",
-      [req.params.id]
-    );
-    if (!result.rows.length) return res.status(404).json({ error: "Request not found." });
+    const result = await prisma.request.updateMany({
+      where: { id: Number(req.params.id) },
+      data:  { seen: true },
+    });
+    if (result.count === 0) return res.status(404).json({ error: "Request not found." });
     res.json({ ok: true });
   } catch (err) { next(err); }
 }
 
-/**
- * PATCH /api/requests/:id/unread
- */
+// ─────────────────────────────────────────────────────────────────────────────
+// PATCH /api/requests/:id/unread
+// ─────────────────────────────────────────────────────────────────────────────
 async function markUnread(req, res, next) {
   try {
-    const result = await pool.query(
-      "UPDATE requests SET seen = FALSE WHERE id = $1 RETURNING id",
-      [req.params.id]
-    );
-    if (!result.rows.length) return res.status(404).json({ error: "Request not found." });
+    const result = await prisma.request.updateMany({
+      where: { id: Number(req.params.id) },
+      data:  { seen: false },
+    });
+    if (result.count === 0) return res.status(404).json({ error: "Request not found." });
     res.json({ ok: true });
   } catch (err) { next(err); }
 }
 
-/**
- * PATCH /api/requests/:id/close  (DeptHOD or Admin only)
- * FIX: checks is_closed before proceeding to prevent double-close
- */
+// ─────────────────────────────────────────────────────────────────────────────
+// PATCH /api/requests/:id/close  (DeptHOD only)
+// ─────────────────────────────────────────────────────────────────────────────
 async function close(req, res, next) {
   try {
     const reqId        = Number(req.params.id);
@@ -250,57 +261,47 @@ async function close(req, res, next) {
       return res.status(403).json({ error: "Only DeptHOD can close tickets." });
     }
 
-    // FIX: Check if already closed
-    const check = await pool.query(
-      "SELECT id, is_closed FROM requests WHERE id = $1",
-      [reqId]
-    );
-    if (!check.rows.length) {
-      return res.status(404).json({ error: "Request not found." });
-    }
-    if (check.rows[0].is_closed) {
+    const existing = await prisma.request.findUnique({ where: { id: reqId } });
+    if (!existing) return res.status(404).json({ error: "Request not found." });
+    if (existing.isClosed) {
       return res.status(409).json({ error: "Ticket is already closed." });
     }
 
-    const now      = new Date();
-    const dateStr  = now.toLocaleDateString("en-IN");
-    const closedLabel = `${dateStr} (Closed)`;
+    const now    = new Date();
+    const dateStr= now.toLocaleDateString("en-IN");
+    const fUrl   = uploadedFile ? buildFileUrl(req, uploadedFile.filename) : null;
+    const fName  = uploadedFile ? uploadedFile.originalname                : null;
+    const isImg  = uploadedFile ? uploadedFile.mimetype.startsWith("image/") : false;
 
-    const result = await pool.query(`
-      UPDATE requests
-      SET    assigned_status = $1,
-             is_closed       = TRUE,
-             resolved_date   = NOW(),
-             resolved_by     = $2,
-             seen            = FALSE
-      WHERE  id = $3
-      RETURNING *
-    `, [closedLabel, user.name, reqId]);
+    const updated = await prisma.request.update({
+      where: { id: reqId },
+      data: {
+        assignedStatus: `${dateStr} (Closed)`,
+        isClosed:       true,
+        resolvedDate:   now,
+        resolvedBy:     user.name,
+        seen:           false,
+      },
+      include: WITH_OWNER,
+    });
 
-    // Insert system closure message in chat
-    const fUrl  = uploadedFile ? fileUrl(req, uploadedFile.filename) : null;
-    const fName = uploadedFile ? uploadedFile.originalname            : null;
-    const isImg = uploadedFile ? uploadedFile.mimetype.startsWith("image/") : false;
+    await prisma.chatMessage.create({
+      data: {
+        requestId: reqId,
+        authorId:  user.empId,
+        author:    user.name,
+        role:      user.role,
+        type:      "system",
+        text:      note
+          ? `🔒 Ticket closed by ${user.name} — ${note}`
+          : `🔒 Ticket closed by ${user.name}`,
+        fileUrl:   fUrl,
+        fileName:  fName,
+        isImage:   isImg,
+      },
+    });
 
-    await pool.query(`
-      INSERT INTO chat_messages
-        (request_id, author, role, type, text, file_url, file_name, is_image)
-      VALUES ($1,$2,$3,'system',$4,$5,$6,$7)
-    `, [
-      reqId,
-      user.name,
-      user.role,
-      note
-        ? `🔒 Ticket closed by ${user.name} — ${note}`
-        : `🔒 Ticket closed by ${user.name}`,
-      fUrl, fName, isImg,
-    ]);
-
-    const userRow = await pool.query(
-      "SELECT name, designation, location FROM users WHERE emp_id = $1",
-      [result.rows[0].emp_id]
-    );
-    res.json(formatRequest({ ...result.rows[0], ...userRow.rows[0] }));
+    res.json(formatRequest(updated, user.empId));
   } catch (err) { next(err); }
 }
 
