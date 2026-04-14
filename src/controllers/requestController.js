@@ -33,7 +33,7 @@ const buildFileUrl = (req, filename) => {
   return `${base}/uploads/${filename}`;
 };
 
-const WITH_OWNER = { owner: true, closeTicket: true };
+const WITH_OWNER = { owner: true, closeTicket: true, chatMessages: true };
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /api/requests?page=1&limit=20&status=open|closed&search=keyword

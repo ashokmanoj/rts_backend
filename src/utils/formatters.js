@@ -53,6 +53,9 @@ function formatRequest(row, viewerEmpId) {
     // Read tracking
     seen:           row.seen,
 
+    // Chat messages (if included in the query)
+    chatMessages:   row.chatMessages ? row.chatMessages.map(formatMessage) : [],
+
     // isOwnRequest: used to hide approval buttons when approver views own submission
     isOwnRequest:   viewerEmpId ? row.empId === viewerEmpId : undefined,
   };
