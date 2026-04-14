@@ -382,20 +382,39 @@ async function main() {
   let created = 0, skipped = 0;
 
   for (const u of USERS) {
+    const emailLower = u.email.toLowerCase();
+    const hash = await bcrypt.hash(u.password, 10);
+
     // Skip if already seeded (safe to re-run)
-    const exists = await prisma.user.findUnique({ where: { empId: u.empId } });
+    const exists = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { empId: u.empId },
+          { email: emailLower }
+        ]
+      }
+    });
+
     if (exists) {
-      process.stdout.write(`   ↩  ${u.empId.padEnd(14)} already exists\n`);
+      // If user exists, we UPDATE it to ensure password matches the seed
+      await prisma.user.update({
+        where: { id: exists.id },
+        data: {
+          passwordHash: hash,
+          role:         u.role, // ensure role is correct too
+          dept:         u.dept,
+        }
+      });
+      process.stdout.write(`   ↩  ${u.empId.padEnd(14)} updated (password reset)\n`);
       skipped++;
       continue;
     }
 
-    const hash = await bcrypt.hash(u.password, 10);
     await prisma.user.create({
       data: {
         empId:        u.empId,
         name:         u.name,
-        email:        u.email.toLowerCase(),
+        email:        emailLower,
         passwordHash: hash,
         role:         u.role,
         dept:         u.dept,

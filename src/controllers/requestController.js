@@ -3,29 +3,28 @@
  * ─────────────────────────────────────────────────────────────────────────────
  * All CRUD operations on Request records.
  *
- * FIX 1 — Correct role-based filtering (was showing all requests to everyone):
- *   RM / HOD  → see requests WHERE the REQUESTOR (owner) belongs to their dept
- *               + their own submissions
- *   DeptHOD   → see requests WHERE assignedDept = their dept + their own
- *   Requestor → only their own requests
- *   Admin     → all requests
+ * ROLES:
+ *   Requestor   → only their own requests
+ *   RM / HOD    → requests from their dept + their own
+ *   DeptHOD     → requests assigned to their dept + their own; can close tickets
+ *   Management  → ALL requests; can approve AND close tickets (like DeptHOD but global)
+ *   Admin       → ALL requests; READ-ONLY (cannot approve or close)
  *
- * FIX 2 — RM/HOD/DeptHOD creating a request always uses user.dept:
- *   The 'dept' field on a request is ALWAYS the owner's department.
- *   We ignore req.body.dept and always use user.dept from the JWT.
+ * PAGINATION — GET /api/requests
+ *   ?page=1, ?limit=20, ?status=open|closed, ?search=keyword
  *
- * FIX 3 — Response includes ownerDept separately:
- *   formatRequest now exposes ownerDept so the frontend can always show
- *   the REQUESTOR's real department regardless of request.dept.
+ * CLOSE TICKET:
+ *   - Note and file are saved to the closure system chat message
+ *   - Both note text and fileUrl appear in the chat thread
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
 "use strict";
 
-const prisma            = require("../db/prisma");
-const { formatRequest } = require("../utils/formatters");
+const prisma                                 = require("../db/prisma");
+const { formatRequest }                      = require("../utils/formatters");
+const { parsePagination, buildPageResponse } = require("../utils/paginate");
 
-/** Build absolute URL for an uploaded file. */
 const buildFileUrl = (req, filename) => {
   if (!filename) return null;
   const base = process.env.SERVER_URL
@@ -34,83 +33,66 @@ const buildFileUrl = (req, filename) => {
   return `${base}/uploads/${filename}`;
 };
 
-/** Always join the request owner so we can filter and display correctly. */
-const WITH_OWNER = { owner: true };
+const WITH_OWNER = { owner: true, closeTicket: true };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// GET /api/requests
-//
-// FIX: The old filter used { dept: userDept } which matched request.dept
-// (the dept stored on the request row). This broke because:
-//   - When an RM creates a request, request.dept was set from req.body.dept
-//     which might be any department, not necessarily the RM's own dept
-//   - The Prisma query { dept: userDept } hit the request table's dept column,
-//     not the owner's dept — so it was inconsistent
-//
-// NEW LOGIC: Join owner and filter on owner.dept so we always check the
-// ACTUAL department of the person who submitted the request.
+// GET /api/requests?page=1&limit=20&status=open|closed&search=keyword
 // ─────────────────────────────────────────────────────────────────────────────
 async function getAll(req, res, next) {
   try {
-    const { role, empId, dept } = req.user;
+    const { role, empId, dept }       = req.user;
+    const { page, limit, skip, take } = parsePagination(req.query);
+    const { status, search }          = req.query;
 
-    let where = {};
+    // Status filter
+    let closureFilter = {};
+    if (status === "open")   closureFilter = { isClosed: false };
+    if (status === "closed") closureFilter = { isClosed: true  };
 
-    if (role === "Requestor") {
-      // Requestors see ONLY their own requests
-      where = { empId };
-
-    } else if (role === "RM" || role === "HOD") {
-      // RM/HOD see requests from people in their department
-      // We join the owner relation and filter by owner.dept
-      // PLUS they always see their own submissions regardless of dept
-      where = {
+    // Search filter
+    let searchFilter = {};
+    if (search && search.trim()) {
+      const term = search.trim();
+      searchFilter = {
         OR: [
-          {
-            // Requests submitted by anyone whose dept = this RM/HOD's dept
-            owner: { dept }
-          },
-          {
-            // Their own submissions (in case they submitted to a different dept)
-            empId
-          }
-        ]
+          { purpose:     { contains: term, mode: "insensitive" } },
+          { description: { contains: term, mode: "insensitive" } },
+          { empId:       { contains: term, mode: "insensitive" } },
+        ],
       };
-
-    } else if (role === "DeptHOD") {
-      // DeptHOD sees requests ASSIGNED to their department
-      // PLUS their own submissions
-      where = {
-        OR: [
-          { assignedDept: dept },
-          { empId }
-        ]
-      };
-
     }
-    // Admin: no where clause — sees ALL requests
 
-    const requests = await prisma.request.findMany({
-      where,
-      include: WITH_OWNER,
-      orderBy: { createdAt: "desc" },
-    });
+    // Role-based filter
+    let roleFilter = {};
+    if (role === "Requestor" || role === "RM" || role === "HOD" || role === "DeptHOD") {
+      // Logic: Own requests OR requests from OTHER departments
+      // BUT NOT requests from OWN department (unless it is self)
+      roleFilter = {
+        OR: [
+          { empId: empId }, // Own requests
+          { dept: { not: dept } } // Other departments
+        ]
+      };
+    }
+    // Management + Admin → no roleFilter (see everything)
 
-    res.json(requests.map((r) => formatRequest(r, empId)));
+    const andClauses = [roleFilter, closureFilter];
+    if (searchFilter.OR) andClauses.push(searchFilter);
+    const where = {
+      AND: andClauses.filter((f) => Object.keys(f).length > 0),
+    };
+
+    const [requests, total] = await Promise.all([
+      prisma.request.findMany({ where, include: WITH_OWNER, orderBy: { createdAt: "desc" }, skip, take }),
+      prisma.request.count({ where }),
+    ]);
+
+    res.json(buildPageResponse(requests.map((r) => formatRequest(r, empId)), total, page, limit));
   } catch (err) { next(err); }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /api/requests
-//
-// FIX: Always use user.dept from the JWT as the request's dept.
-// This ensures:
-//   - The "Dept" column in the table always shows the REQUESTOR's real dept
-//   - RM/HOD/DeptHOD who submit requests are correctly filtered by their dept
-//   - Mobile app and web see consistent data
-//
-// The body's 'dept' is used ONLY for assignedDept (which dept should handle it).
-// If body.assignedDept is not provided, it defaults to user.dept.
 // ─────────────────────────────────────────────────────────────────────────────
 async function create(req, res, next) {
   try {
@@ -118,9 +100,7 @@ async function create(req, res, next) {
     const user         = req.user;
     const uploadedFile = req.file;
 
-    if (!purpose) {
-      return res.status(400).json({ error: "purpose is required." });
-    }
+    if (!purpose) return res.status(400).json({ error: "purpose is required." });
 
     const request = await prisma.request.create({
       data: {
@@ -129,13 +109,8 @@ async function create(req, res, next) {
         description:  description || "",
         fileUrl:      uploadedFile ? buildFileUrl(req, uploadedFile.filename) : null,
         fileName:     uploadedFile ? uploadedFile.originalname                : null,
-        // dept is ALWAYS the submitting user's own department from JWT
         dept:         user.dept,
-        // assignedDept = where the request is routed to (defaults to own dept)
         assignedDept: assignedDept || user.dept,
-        // seen=false so RM/HOD/DeptHOD see the blue "unread" highlight.
-        // The frontend overrides this to seen=true for the CREATOR only,
-        // so the requestor doesn't see their own new request highlighted.
         seen:         false,
       },
       include: WITH_OWNER,
@@ -155,49 +130,62 @@ async function approval(req, res, next) {
     const user  = req.user;
     const now   = new Date();
 
-    if (!decision) {
-      return res.status(400).json({ error: "decision is required." });
-    }
+    if (!decision) return res.status(400).json({ error: "decision is required." });
+
     const ALLOWED = ["Approved", "Rejected", "Checking", "Forwarded"];
     if (!ALLOWED.includes(decision)) {
       return res.status(400).json({ error: `decision must be one of: ${ALLOWED.join(", ")}` });
     }
 
-    const existing = await prisma.request.findUnique({ where: { id: reqId } });
-    if (!existing) return res.status(404).json({ error: "Request not found." });
-    if (existing.isClosed) {
-      return res.status(403).json({ error: "Cannot update a closed ticket." });
+    const existing = await prisma.request.findUnique({ 
+      where: { id: reqId },
+      include: { owner: true }
+    });
+    if (!existing)       return res.status(404).json({ error: "Request not found." });
+    if (existing.isClosed) return res.status(403).json({ error: "Cannot update a closed ticket." });
+
+    // Admin is always read-only
+    if (user.role === "Admin") {
+      return res.status(403).json({ error: "Admin has read-only access." });
     }
 
     let updateData = { seen: false };
 
+    // Custom Approval Logic:
+    // If RM/HOD/DeptHOD made the request, ONLY Management can approve it.
+    const isSpecialRequest = ["RM", "HOD", "DeptHOD"].includes(existing.owner.role);
+
     if (decision === "Forwarded") {
-      if (!newDept) {
-        return res.status(400).json({ error: "newDept is required when forwarding." });
+      if (!newDept) return res.status(400).json({ error: "newDept is required when forwarding." });
+      updateData = { ...updateData, forwarded: true, forwardedBy: user.name, forwardedAt: now, assignedDept: newDept };
+    } else if (isSpecialRequest) {
+      if (user.role !== "Management") {
+        return res.status(403).json({ error: "This request (from RM/HOD/DeptHOD) can only be approved by Management." });
       }
-      updateData = {
-        ...updateData,
-        forwarded:    true,
-        forwardedBy:  user.name,
-        forwardedAt:  now,
-        assignedDept: newDept,
-      };
+      // Since mgmtStatus is removed, we treat Management's decision as overriding the current path
+      // or we can set deptHodStatus as the final say. Let's use deptHodStatus for management's override here.
+      updateData = { ...updateData, deptHodStatus: decision, deptHodDate: now };
     } else if (user.role === "RM") {
       updateData = { ...updateData, rmStatus: decision, rmDate: now };
     } else if (user.role === "HOD") {
       updateData = { ...updateData, hodStatus: decision, hodDate: now };
     } else if (user.role === "DeptHOD") {
       updateData = { ...updateData, deptHodStatus: decision, deptHodDate: now };
-    } else if (user.role === "Admin") {
-      return res.status(403).json({ error: "Admin has read-only access." });
+    } else if (user.role === "Management") {
+      // Management can approve anything
+      updateData = { ...updateData, deptHodStatus: decision, deptHodDate: now };
     } else {
-      return res.status(403).json({ error: "Your role cannot approve requests." });
+      // Normal Requestors can do "Checking" or "Close" on OTHER dept requests as per user requirement
+      if (existing.dept !== user.dept && (decision === "Checking")) {
+         // User said "he clicking checking button to take action"
+         // We can log this in chat as a checking action.
+      } else {
+        return res.status(403).json({ error: "Your role cannot approve this request." });
+      }
     }
 
     const updated = await prisma.request.update({
-      where:   { id: reqId },
-      data:    updateData,
-      include: WITH_OWNER,
+      where: { id: reqId }, data: updateData, include: WITH_OWNER,
     });
 
     await prisma.chatMessage.create({
@@ -225,8 +213,7 @@ async function approval(req, res, next) {
 async function markSeen(req, res, next) {
   try {
     const result = await prisma.request.updateMany({
-      where: { id: Number(req.params.id) },
-      data:  { seen: true },
+      where: { id: Number(req.params.id) }, data: { seen: true },
     });
     if (result.count === 0) return res.status(404).json({ error: "Request not found." });
     res.json({ ok: true });
@@ -239,8 +226,7 @@ async function markSeen(req, res, next) {
 async function markUnread(req, res, next) {
   try {
     const result = await prisma.request.updateMany({
-      where: { id: Number(req.params.id) },
-      data:  { seen: false },
+      where: { id: Number(req.params.id) }, data: { seen: false },
     });
     if (result.count === 0) return res.status(404).json({ error: "Request not found." });
     res.json({ ok: true });
@@ -248,7 +234,8 @@ async function markUnread(req, res, next) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PATCH /api/requests/:id/close  (DeptHOD only)
+// PATCH /api/requests/:id/close
+// Close ticket: saves to CloseTicket table + system chat message
 // ─────────────────────────────────────────────────────────────────────────────
 async function close(req, res, next) {
   try {
@@ -257,22 +244,38 @@ async function close(req, res, next) {
     const user         = req.user;
     const uploadedFile = req.file;
 
-    if (user.role !== "DeptHOD" && user.role !== "Admin") {
-      return res.status(403).json({ error: "Only DeptHOD can close tickets." });
-    }
-
     const existing = await prisma.request.findUnique({ where: { id: reqId } });
-    if (!existing) return res.status(404).json({ error: "Request not found." });
-    if (existing.isClosed) {
-      return res.status(409).json({ error: "Ticket is already closed." });
+    if (!existing)         return res.status(404).json({ error: "Request not found." });
+    if (existing.isClosed) return res.status(409).json({ error: "Ticket is already closed." });
+
+    // New logic: 
+    // 1. DeptHOD and Management can close any ticket.
+    // 2. Users (Requestors) can close tickets of OTHER departments.
+    const isOtherDept = existing.dept !== user.dept;
+    const canClose = ["DeptHOD", "Management"].includes(user.role) || isOtherDept;
+
+    if (!canClose) {
+      return res.status(403).json({ error: "You are not authorized to close this ticket." });
     }
 
-    const now    = new Date();
-    const dateStr= now.toLocaleDateString("en-IN");
-    const fUrl   = uploadedFile ? buildFileUrl(req, uploadedFile.filename) : null;
-    const fName  = uploadedFile ? uploadedFile.originalname                : null;
-    const isImg  = uploadedFile ? uploadedFile.mimetype.startsWith("image/") : false;
+    const now     = new Date();
+    const dateStr = now.toLocaleDateString("en-IN");
+    const fUrl    = uploadedFile ? buildFileUrl(req, uploadedFile.filename) : null;
+    const fName   = uploadedFile ? uploadedFile.originalname                : null;
+    const isImg   = uploadedFile ? uploadedFile.mimetype.startsWith("image/") : false;
 
+    // 1. Save to CloseTicket table
+    await prisma.closeTicket.create({
+      data: {
+        requestId:   reqId,
+        description: note || "No reason provided",
+        fileUrl:     fUrl,
+        fileName:    fName,
+        closedDate:  now
+      }
+    });
+
+    // 2. Update Request status
     const updated = await prisma.request.update({
       where: { id: reqId },
       data: {
@@ -285,6 +288,10 @@ async function close(req, res, next) {
       include: WITH_OWNER,
     });
 
+    const closureText = note
+      ? `🔒 Ticket closed by ${user.name} (${user.role})\n\nResolution note: ${note}`
+      : `🔒 Ticket closed by ${user.name} (${user.role})`;
+
     await prisma.chatMessage.create({
       data: {
         requestId: reqId,
@@ -292,9 +299,7 @@ async function close(req, res, next) {
         author:    user.name,
         role:      user.role,
         type:      "system",
-        text:      note
-          ? `🔒 Ticket closed by ${user.name} — ${note}`
-          : `🔒 Ticket closed by ${user.name}`,
+        text:      closureText,
         fileUrl:   fUrl,
         fileName:  fName,
         isImage:   isImg,

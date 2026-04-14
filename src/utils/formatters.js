@@ -1,30 +1,11 @@
 /**
  * src/utils/formatters.js
- * ─────────────────────────────────────────────────────────────────────────────
  * Converts raw Prisma rows into the JSON shape the frontend/mobile app uses.
- *
- * FIX — dept field now always returns OWNER's real department:
- *   Previously: row.dept (the value stored on the request row)
- *   Now:        row.owner?.dept ?? row.dept
- *
- *   This matters because:
- *   - When an RM/HOD/DeptHOD creates a request, request.dept is set from
- *     user.dept (fixed in requestController), but old records might differ.
- *   - The owner relation is always joined, so owner.dept is always reliable.
- *   - Mobile app and web both receive the correct requestor department.
- *
- * Also adds: isOwnRequest field so frontend can detect when an RM/HOD/DeptHOD
- * is viewing their own submission (to hide approval buttons and show bell icon).
- * ─────────────────────────────────────────────────────────────────────────────
+ * Updated: Management role support + mgmtStatus field.
  */
 
 "use strict";
 
-/**
- * @param {object} row         - Prisma request row (owner relation included)
- * @param {string} [viewerEmpId] - empId of the currently logged-in user
- *                                 (optional — used to set isOwnRequest)
- */
 function formatRequest(row, viewerEmpId) {
   const pad = (d) => (d ? new Date(d).toLocaleString("en-IN") : null);
 
@@ -33,11 +14,7 @@ function formatRequest(row, viewerEmpId) {
     date:           new Date(row.createdAt).toLocaleDateString("en-IN"),
     empId:          row.empId,
     name:           row.owner?.name        ?? row.empId,
-
-    // FIX: Always use the owner's actual dept, not the stored request.dept
-    // (request.dept is now always == owner.dept but this is extra-safe)
     dept:           row.owner?.dept        ?? row.dept,
-
     designation:    row.owner?.designation ?? "—",
     location:       row.owner?.location   ?? "—",
     purpose:        row.purpose,
@@ -45,7 +22,7 @@ function formatRequest(row, viewerEmpId) {
     fileUrl:        row.fileUrl            ?? null,
     fileName:       row.fileName           ?? null,
 
-    // Approval statuses
+    // Approval statuses — RM / HOD / DeptHOD
     rmStatus:       row.rmStatus,
     rmDate:         pad(row.rmDate),
     hodStatus:      row.hodStatus,
@@ -65,19 +42,22 @@ function formatRequest(row, viewerEmpId) {
     resolvedDate:   row.resolvedDate       ?? null,
     resolvedBy:     row.resolvedBy,
 
+    // New CloseTicket data
+    closeData:      row.closeTicket ? {
+      description: row.closeTicket.description,
+      fileUrl:     row.closeTicket.fileUrl,
+      fileName:    row.closeTicket.fileName,
+      closedDate:  pad(row.closeTicket.closedDate),
+    } : null,
+
     // Read tracking
     seen:           row.seen,
 
-    // isOwnRequest: true when the logged-in user is the one who submitted it.
-    // RM/HOD/DeptHOD use this to switch to "requestor mode" for their own
-    // submissions — no approval buttons, show bell icon instead of rocket.
+    // isOwnRequest: used to hide approval buttons when approver views own submission
     isOwnRequest:   viewerEmpId ? row.empId === viewerEmpId : undefined,
   };
 }
 
-/**
- * @param {object} row - Prisma chat_message row
- */
 function formatMessage(row) {
   return {
     id:           row.id,

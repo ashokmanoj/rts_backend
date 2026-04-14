@@ -1,15 +1,6 @@
 // =============================================================================
 // prisma/schema.prisma — RTS (Request Tracking System)
 // =============================================================================
-// SETUP STEPS (run once):
-//   1. npm install
-//   2. npx prisma generate          ← compile Prisma Client
-//   3. npx prisma db push           ← push schema to PostgreSQL
-//   4. node src/db/seed.js          ← seed all users
-//
-// DATABASE_URL in .env:
-//   DATABASE_URL="postgresql://postgres:PASSWORD@localhost:5432/rts?schema=public"
-// =============================================================================
 
 generator client {
   provider = "prisma-client-js"
@@ -25,6 +16,7 @@ enum Role {
   RM
   HOD
   DeptHOD
+  Management
   Admin
 }
 
@@ -82,10 +74,24 @@ model Request {
 
   owner        User          @relation("RequestOwner", fields: [empId], references: [empId])
   chatMessages ChatMessage[]
+  closeTicket  CloseTicket?
 
   @@index([empId])
   @@index([assignedDept])
   @@map("requests")
+}
+
+model CloseTicket {
+  id          Int      @id @default(autoincrement())
+  requestId   Int      @unique @map("request_id")
+  description String?
+  fileUrl     String?  @map("file_url")
+  fileName    String?  @map("file_name")
+  closedDate  DateTime @default(now()) @map("closed_date")
+
+  request Request @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@map("close_tickets")
 }
 
 model ChatMessage {
@@ -113,3 +119,4 @@ model ChatMessage {
   @@index([requestId])
   @@map("chat_messages")
 }
+  
