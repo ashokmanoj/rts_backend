@@ -37,7 +37,7 @@ const getMessages = async (req, res, next) => {
 const sendMessage = async (req, res, next) => {
   try {
     const requestId = Number(req.params.id);
-    const { text } = req.body;
+    const { text, type, duration, status, purpose, changedDept, originalDept } = req.body;
     const user = req.user;
     const uploadedFile = req.file;
 
@@ -45,7 +45,7 @@ const sendMessage = async (req, res, next) => {
       return res.status(400).json({ error: "Invalid request ID" });
     }
 
-    if (!text && !uploadedFile) {
+    if (!text && !uploadedFile && type !== "approval") {
       return res.status(400).json({ error: "Message cannot be empty" });
     }
 
@@ -61,19 +61,35 @@ const sendMessage = async (req, res, next) => {
       ? uploadedFile.mimetype.startsWith("image/")
       : false;
 
-    const message = await prisma.chatMessage.create({
-      data: {
-        requestId,
-        authorId: user.empId,
-        author: user.name,
-        role: user.role,
-        type: uploadedFile ? "file" : "message",
-        text: text || "",
-        fileUrl,
-        fileName,
-        isImage,
-      },
-    });
+    // Determine type: if not provided, fallback to file or message
+    let finalType = type || (uploadedFile ? "file" : "message");
+
+    const [message] = await Promise.all([
+      prisma.chatMessage.create({
+        data: {
+          requestId,
+          authorId:     user.empId,
+          author:       user.name,
+          role:         user.role,
+          type:         finalType,
+          text:         text || "",
+          fileUrl:      finalType === "voice" ? null : fileUrl,
+          fileName:     finalType === "voice" ? null : fileName,
+          isImage:      finalType === "voice" ? false : isImage,
+          voiceUrl:     finalType === "voice" ? fileUrl : null,
+          duration:     duration     || null,
+          status:       status       || null,
+          purpose:      purpose      || null,
+          changedDept:  changedDept  || null,
+          originalDept: originalDept || null,
+        },
+      }),
+      // Mark request as unread
+      prisma.request.update({
+        where: { id: requestId },
+        data:  { seen: false },
+      }),
+    ]);
 
     res.status(201).json(message);
   } catch (err) {
