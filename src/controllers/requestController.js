@@ -64,17 +64,30 @@ async function getAll(req, res, next) {
 
     // Role-based filter
     let roleFilter = {};
-    if (role === "Requestor" || role === "RM" || role === "HOD" || role === "DeptHOD") {
-      // Logic: Own requests OR requests from OTHER departments
-      // BUT NOT requests from OWN department (unless it is self)
+    if (role === "Management" || role === "Admin") {
+      roleFilter = {}; // See everything
+    } else if (role === "RM" || role === "HOD" || role === "DeptHOD") {
+      roleFilter = {
+        OR: [
+          { empId: empId },
+          { dept: dept },         // See requests FROM their dept
+          { assignedDept: dept }  // See requests TO their dept
+        ]
+      };
+    } else {
+      // Requestor
       roleFilter = {
         OR: [
           { empId: empId }, // Own requests
-          { dept: { not: dept } } // Other departments
+          {
+            AND: [
+              { assignedDept: dept }, // Requests assigned to my dept
+              { dept: { not: dept } } // ...from other departments
+            ]
+          }
         ]
       };
     }
-    // Management + Admin → no roleFilter (see everything)
 
     const andClauses = [roleFilter, closureFilter];
     if (searchFilter.OR) andClauses.push(searchFilter);
@@ -151,6 +164,10 @@ async function approval(req, res, next) {
 
     let updateData = { seen: false };
 
+    if (decision === "Checking") {
+      updateData.assignedStatus = "Checking";
+    }
+
     // Custom Approval Logic:
     // If RM/HOD/DeptHOD made the request, ONLY Management can approve it.
     const isSpecialRequest = ["RM", "HOD", "DeptHOD"].includes(existing.owner.role);
@@ -162,8 +179,6 @@ async function approval(req, res, next) {
       if (user.role !== "Management") {
         return res.status(403).json({ error: "This request (from RM/HOD/DeptHOD) can only be approved by Management." });
       }
-      // Since mgmtStatus is removed, we treat Management's decision as overriding the current path
-      // or we can set deptHodStatus as the final say. Let's use deptHodStatus for management's override here.
       updateData = { ...updateData, deptHodStatus: decision, deptHodDate: now };
     } else if (user.role === "RM") {
       updateData = { ...updateData, rmStatus: decision, rmDate: now };
@@ -172,13 +187,13 @@ async function approval(req, res, next) {
     } else if (user.role === "DeptHOD") {
       updateData = { ...updateData, deptHodStatus: decision, deptHodDate: now };
     } else if (user.role === "Management") {
-      // Management can approve anything
       updateData = { ...updateData, deptHodStatus: decision, deptHodDate: now };
     } else {
-      // Normal Requestors can do "Checking" or "Close" on OTHER dept requests as per user requirement
-      if (existing.dept !== user.dept && (decision === "Checking")) {
-         // User said "he clicking checking button to take action"
-         // We can log this in chat as a checking action.
+      // Normal Requestors / Team members
+      // Can do "Checking" if they are in the assigned department
+      const isTeamMember = existing.assignedDept === user.dept;
+      if (isTeamMember && decision === "Checking") {
+         // Already handled assignedStatus above
       } else {
         return res.status(403).json({ error: "Your role cannot approve this request." });
       }
@@ -248,11 +263,12 @@ async function close(req, res, next) {
     if (!existing)         return res.status(404).json({ error: "Request not found." });
     if (existing.isClosed) return res.status(409).json({ error: "Ticket is already closed." });
 
-    // New logic: 
-    // 1. DeptHOD and Management can close any ticket.
-    // 2. Users (Requestors) can close tickets of OTHER departments.
-    const isOtherDept = existing.dept !== user.dept;
-    const canClose = ["DeptHOD", "Management"].includes(user.role) || isOtherDept;
+    const isAssignedToMyDept = existing.assignedDept === user.dept;
+    const isFromOtherDept    = existing.dept !== user.dept;
+    
+    // DeptHOD and Management can close anything.
+    // Team members can close tickets assigned TO them from OTHER departments.
+    const canClose = ["DeptHOD", "Management"].includes(user.role) || (isAssignedToMyDept && isFromOtherDept);
 
     if (!canClose) {
       return res.status(403).json({ error: "You are not authorized to close this ticket." });
@@ -289,8 +305,8 @@ async function close(req, res, next) {
     });
 
     const closureText = note
-      ? `🔒 Ticket closed by ${user.name} (${user.role})\n\nResolution note: ${note}`
-      : `🔒 Ticket closed by ${user.name} (${user.role})`;
+      ? `🔒 Ticket closed by ${user.name} (${user.dept})\n\nResolution note: ${note} `
+      : `🔒 Ticket closed by ${user.name} (${user.dept})`;
 
     await prisma.chatMessage.create({
       data: {
