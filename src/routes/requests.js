@@ -1,4 +1,4 @@
-const router = require("express").Router();
+const router = require("express").Router({ caseSensitive: true });
 const ctrl = require("../controllers/requestController");
 const chatCtrl = require("../controllers/chatController");
 const { authenticate } = require("../middleware/auth");
@@ -11,6 +11,9 @@ router.use(authenticate);
 
 // GET all requests
 router.get("/", ctrl.getAll);
+
+// GET unique filter options
+router.get("/filters", ctrl.getFilterOptions);
 
 // CREATE request (with optional file)
 router.post("/", upload.single("file"), ctrl.create);

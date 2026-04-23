@@ -37,6 +37,7 @@ function formatRequest(row, viewerEmpId) {
     forwardedAt:    pad(row.forwardedAt),
 
     // Closure
+    status:         row.resolvedDate       ? "Closed" : "Open",
     assignedStatus: row.assignedStatus,
     isClosed:       row.isClosed           ?? false,
     resolvedDate:   row.resolvedDate       ?? null,
@@ -50,8 +51,8 @@ function formatRequest(row, viewerEmpId) {
       closedDate:  pad(row.closeTicket.closedDate),
     } : null,
 
-    // Read tracking
-    seen:           row.seen,
+    // Read tracking (per user)
+    seen: row.readReceipts ? row.readReceipts.some(r => r.empId === viewerEmpId) : false,
 
     // Chat messages (if included in the query)
     chatMessages:   row.chatMessages ? row.chatMessages.map(formatMessage) : [],

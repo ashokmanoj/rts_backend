@@ -18,6 +18,8 @@ enum Role {
   DeptHOD
   Management
   Admin
+  HR
+  FoodCommittee
 }
 
 enum MessageType {
@@ -34,17 +36,49 @@ model User {
   empId        String   @unique @map("emp_id")
   name         String
   email        String   @unique
+  phone        String?
   passwordHash String   @map("password_hash")
   role         Role     @default(Requestor)
   dept         String
   designation  String?
   location     String?
+  isActive     Boolean  @default(true) @map("is_active")
+  lastLogin    DateTime? @map("last_login")
+  lastSeen     DateTime? @map("last_seen")
   createdAt    DateTime @default(now()) @map("created_at")
 
-  requests     Request[]     @relation("RequestOwner")
-  messages     ChatMessage[] @relation("MessageSender")
+  rmEmpId      String?  @map("rm_emp_id")
+  hodEmpId     String?  @map("hod_emp_id")
+
+  resetPasswordToken   String?   @unique @map("reset_password_token")
+  resetPasswordExpires DateTime? @map("reset_password_expires")
+
+  rm           User?    @relation("UserRM",  fields: [rmEmpId],  references: [empId], onDelete: SetNull)
+  hod          User?    @relation("UserHOD", fields: [hodEmpId], references: [empId], onDelete: SetNull)
+  rmReports    User[]   @relation("UserRM")
+  hodReports   User[]   @relation("UserHOD")
+
+  requests          Request[]          @relation("RequestOwner")
+  messages          ChatMessage[]      @relation("MessageSender")
+  readReceipts      RequestRead[]
+  loginLogs         LoginLog[]
+  foodSubscription  FoodSubscription?
+  foodCancellations FoodCancellation[]
 
   @@map("users")
+}
+
+model LoginLog {
+  id        Int      @id @default(autoincrement())
+  empId     String   @map("emp_id")
+  loginAt   DateTime @default(now()) @map("login_at")
+  logoutAt  DateTime? @map("logout_at")
+  duration  Int?     @default(0) // Duration in minutes
+
+  user      User     @relation(fields: [empId], references: [empId], onDelete: Cascade)
+
+  @@index([empId])
+  @@map("login_logs")
 }
 
 model Request {
@@ -69,16 +103,29 @@ model Request {
   isClosed       Boolean   @default(false) @map("is_closed")
   resolvedDate   DateTime? @map("resolved_date")
   resolvedBy     String?   @default("-") @map("resolved_by")
-  seen           Boolean   @default(true)
   createdAt      DateTime  @default(now()) @map("created_at")
 
   owner        User          @relation("RequestOwner", fields: [empId], references: [empId])
   chatMessages ChatMessage[]
   closeTicket  CloseTicket?
+  readReceipts RequestRead[]
 
   @@index([empId])
   @@index([assignedDept])
   @@map("requests")
+}
+
+model RequestRead {
+  id        Int      @id @default(autoincrement())
+  requestId Int      @map("request_id")
+  empId     String   @map("emp_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  request Request @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [empId], references: [empId], onDelete: Cascade)
+
+  @@unique([requestId, empId])
+  @@map("request_reads")
 }
 
 model CloseTicket {
@@ -118,5 +165,39 @@ model ChatMessage {
 
   @@index([requestId])
   @@map("chat_messages")
+}
+
+model FoodSubscription {
+  id            Int       @id @default(autoincrement())
+  empId         String    @unique @map("emp_id")
+  isActive      Boolean   @default(true) @map("is_active")
+  suspendedFrom DateTime? @map("suspended_from")
+  startDate     DateTime  @default(now()) @map("start_date")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [empId], references: [empId], onDelete: Cascade)
+
+  @@map("food_subscriptions")
+}
+
+model FoodCancellation {
+  id            Int      @id @default(autoincrement())
+  empId         String   @map("emp_id")
+  weekStartDate DateTime @map("week_start_date")
+  cancelledAt   DateTime @default(now()) @map("cancelled_at")
+
+  user User @relation(fields: [empId], references: [empId], onDelete: Cascade)
+
+  @@unique([empId, weekStartDate])
+  @@index([empId])
+  @@map("food_cancellations")
+}
+
+model Holiday {
+  id   Int      @id @default(autoincrement())
+  date DateTime @unique
+  name String
+
+  @@map("holidays")
 }
   

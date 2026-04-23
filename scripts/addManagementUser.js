@@ -12,7 +12,7 @@
 
 require("dotenv").config();
 const bcrypt = require("bcryptjs");
-const prisma  = require("../src/db/prisma");
+const prisma  = require("../src/config/database");
 
 /*************  ✨ Windsurf Command ⭐  *************/
 /**

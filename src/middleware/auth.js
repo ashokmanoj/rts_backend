@@ -33,4 +33,16 @@ function authorize(...roles) {
   };
 }
 
-module.exports = { authenticate, authorize };
+/**
+ * Allows only DeptHOD of HR or Food Committee departments.
+ * Used for food report/download endpoints.
+ */
+function authorizeHODReport(req, res, next) {
+  const { role, dept } = req.user || {};
+  const allowed =
+    role === 'DeptHOD' && ['HR', 'Food Committee'].includes(dept);
+  if (!allowed) return res.status(403).json({ error: 'Access denied.' });
+  next();
+}
+
+module.exports = { authenticate, authorize, authorizeHODReport };

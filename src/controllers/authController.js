@@ -1,75 +1,81 @@
 /**
  * src/controllers/authController.js
  * ─────────────────────────────────────────────────────────────────────────────
- * Handles user authentication:
- *   POST /api/auth/login   → validate credentials, return JWT + user payload
- *   GET  /api/auth/me      → return decoded JWT payload (no extra DB hit)
+ * HTTP Handlers for Authentication.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
 "use strict";
 
-const bcrypt  = require("bcryptjs");
-const jwt     = require("jsonwebtoken");
-const prisma  = require("../db/prisma");
+const authService = require("../services/authService");
 
-/**
- * POST /api/auth/login
- * Body: { email, password }
- * Returns: { token, user: { userId, empId, name, role, dept } }
- */
 async function login(req, res, next) {
   try {
     const { email, password } = req.body;
-
-    // ── Input validation ────────────────────────────────────────────────────
     if (!email || !password) {
       return res.status(400).json({ error: "Email and password are required." });
     }
+    const result = await authService.login(email, password);
+    res.json(result);
+  } catch (err) {
+    if (err.message === "Invalid credentials.") return res.status(401).json({ error: err.message });
+    next(err);
+  }
+}
 
-    // ── Find user by email (case-insensitive) ───────────────────────────────
-    const user = await prisma.user.findUnique({
-      where: { email: email.trim().toLowerCase() },
-    });
-
-    if (!user) {
-      return res.status(401).json({ error: "Invalid credentials." });
-    }
-
-    // ── Verify password ─────────────────────────────────────────────────────
-    const match = await bcrypt.compare(password, user.passwordHash);
-    if (!match) {
-      return res.status(401).json({ error: "Invalid credentials." });
-    }
-
-    // ── Build JWT payload ───────────────────────────────────────────────────
-    // Note: we use `userId` (UUID) for internal reference; `empId` (e.g. AC-1030)
-    // is the business identifier used in request records and chat messages.
-    const payload = {
-      userId: user.id,
-      empId:  user.empId,
-      name:   user.name,
-      role:   user.role,
-      dept:   user.dept,
-    };
-
-    const token = jwt.sign(payload, process.env.JWT_SECRET, {
-      expiresIn: process.env.JWT_EXPIRES_IN || "7d",
-    });
-
-    res.json({ token, user: payload });
+async function logout(req, res, next) {
+  try {
+    await authService.logout(req.user.empId);
+    res.json({ success: true });
   } catch (err) {
     next(err);
   }
 }
 
-/**
- * GET /api/auth/me
- * No DB hit — returns the user object already decoded from the JWT.
- * The `authenticate` middleware attaches req.user before this runs.
- */
-function me(req, res) {
-  res.json({ user: req.user });
+async function heartbeat(req, res, next) {
+  try {
+    await authService.heartbeat(req.user.userId || req.user.id, req.user.empId);
+    res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
 }
 
-module.exports = { login, me };
+async function me(req, res, next) {
+  try {
+    const user = await authService.getUserById(req.user.empId);
+    if (!user) return res.status(404).json({ error: "User not found" });
+    res.json({ user: { userId: user.id, ...user } });
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function forgotPassword(req, res, next) {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: "Email is required." });
+    
+    await authService.forgotPassword(email);
+    res.json({ message: "If that email is registered, a reset link has been sent." });
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function resetPassword(req, res, next) {
+  try {
+    const { token } = req.params;
+    const { password } = req.body;
+    if (!token || !password) return res.status(400).json({ error: "Token and password required." });
+    if (password.length < 8) return res.status(400).json({ error: "Min 8 chars required." });
+
+    await authService.resetPassword(token, password);
+    res.json({ message: "Password reset successfully." });
+  } catch (err) {
+    if (err.message === "Invalid or expired reset link.") return res.status(400).json({ error: err.message });
+    next(err);
+  }
+}
+
+module.exports = { login, me, logout, heartbeat, forgotPassword, resetPassword };

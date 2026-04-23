@@ -362,76 +362,120 @@ const USERS = [
   { empId:"DHOD-BUSIN", name:"Business Development Department HOD",    email:"businessdevelopment@rts.com",     role:"DeptHOD", dept:"Business Development",     designation:"Department Head", location:"HQ", password:"Businessdevelopment@123"     },
   { empId:"DHOD-CORPO", name:"Corporate Communications Department HOD",email:"corporatecommunications@rts.com", role:"DeptHOD", dept:"Corporate Communications", designation:"Department Head", location:"HQ", password:"Corporatecommunications@123"  },
   { empId:"DHOD-DOCUM", name:"Documantation Department HOD",           email:"documantation@rts.com",           role:"DeptHOD", dept:"Documantation",            designation:"Department Head", location:"HQ", password:"Documantation@123"           },
+  { empId:"DHOD-FOODC", name:"Food Committee DeptHOD",                 email:"foodcommittee@rts.com",           role:"DeptHOD", dept:"Food Committee",           designation:"Department Head", location:"HQ", password:"Foodcommittee@123"           },
   { empId:"DHOD-GOVTR", name:"Govt. Relations Department HOD",         email:"govtrelations@rts.com",           role:"DeptHOD", dept:"Govt. Relations",          designation:"Department Head", location:"HQ", password:"Govtrelations@123"           },
   { empId:"DHOD-HR",    name:"HR Department HOD",                      email:"hr@rts.com",                      role:"DeptHOD", dept:"HR",                       designation:"Department Head", location:"HQ", password:"Hr@123"                      },
   { empId:"DHOD-MANAG", name:"Management Department HOD",              email:"management@rts.com",              role:"DeptHOD", dept:"Management",               designation:"Department Head", location:"HQ", password:"Management@123"              },
   { empId:"DHOD-MARKE", name:"Marketing Department HOD",               email:"marketing@rts.com",               role:"DeptHOD", dept:"Marketing",                designation:"Department Head", location:"HQ", password:"Marketing@123"               },
   { empId:"DHOD-OPERA", name:"Operation Department HOD",               email:"operation@rts.com",               role:"DeptHOD", dept:"Operation",                designation:"Department Head", location:"HQ", password:"Operation@123"               },
   { empId:"DHOD-PURCH", name:"Purchase Department HOD",                email:"purchase@rts.com",                role:"DeptHOD", dept:"Purchase",                 designation:"Department Head", location:"HQ", password:"Purchase@123"                },
+  { empId:"DHOD-RTSHD", name:"RTS Help Desk DeptHOD",                  email:"rtshelpdesk@rts.com",             role:"DeptHOD", dept:"RTS Help Desk",            designation:"Department Head", location:"HQ", password:"Rtshelpdesk@123"            },
   { empId:"DHOD-SOFTW", name:"Software Department HOD",                email:"software@rts.com",                role:"DeptHOD", dept:"Software",                 designation:"Department Head", location:"HQ", password:"Software@123"                },
   { empId:"DHOD-STORE", name:"Store Department HOD",                   email:"store@rts.com",                   role:"DeptHOD", dept:"Store",                    designation:"Department Head", location:"HQ", password:"Store@123"                   },
   { empId:"DHOD-SYSTE", name:"System admin Department HOD",            email:"systemadmin@rts.com",             role:"DeptHOD", dept:"System admin",             designation:"Department Head", location:"HQ", password:"Systemadmin@123"             },
+  { empId:"DHOD-TACOM", name:"TA Committee DeptHOD",                   email:"tacommittee@rts.com",             role:"DeptHOD", dept:"TA Committee",             designation:"Department Head", location:"HQ", password:"Tacommittee@123"             },
   { empId:"DHOD-TECHN", name:"Technical Support Department HOD",       email:"technicalsupport@rts.com",        role:"DeptHOD", dept:"Technical Support",        designation:"Department Head", location:"HQ", password:"Technicalsupport@123"        },
 
   // ── SYSTEM ADMIN ──────────────────────────────────────────────────────────
   { empId:"ADMIN-001", name:"System Admin", email:"admin@rts.com", role:"Admin", dept:"Management", designation:"System Administrator", location:"HQ", password:"Admin@123" },
 ];
 
+// Role override: HR/Management departments get their specialized roles;
+// DeptHOD and Admin accounts keep their roles; everyone else keeps RM/HOD/Requestor
+function resolveRole(u) {
+  if (u.role === "DeptHOD")       return "DeptHOD";
+  if (u.role === "Admin")         return "Admin";
+  if (u.dept === "HR")            return "HR";
+  if (u.dept === "Management")    return "Management";
+  if (u.dept === "Food Committee") return "FoodCommittee";
+  return u.role; // Requestor, RM, HOD
+}
+
 async function main() {
-  console.log(`\n📦  RTS Seeder — ${USERS.length} users to process\n`);
-  let created = 0, skipped = 0;
+  console.log("\n🗑️   Clearing all existing data...");
+  await prisma.foodCancellation.deleteMany();
+  await prisma.foodSubscription.deleteMany();
+  await prisma.requestRead.deleteMany();
+  await prisma.closeTicket.deleteMany();
+  await prisma.chatMessage.deleteMany();
+  await prisma.loginLog.deleteMany();
+  await prisma.request.deleteMany();
+  await prisma.user.deleteMany();
+  await prisma.holiday.deleteMany();
+  console.log("✅  All data cleared.\n");
+
+  console.log(`📦  Seeding ${USERS.length} users (password: Test@123)...\n`);
+  const hash = await bcrypt.hash("Test@123", 10);
+  let created = 0;
 
   for (const u of USERS) {
-    const emailLower = u.email.toLowerCase();
-    const hash = await bcrypt.hash(u.password, 10);
-
-    // Skip if already seeded (safe to re-run)
-    const exists = await prisma.user.findFirst({
-      where: {
-        OR: [
-          { empId: u.empId },
-          { email: emailLower }
-        ]
-      }
-    });
-
-    if (exists) {
-      // If user exists, we UPDATE it to ensure password matches the seed
-      await prisma.user.update({
-        where: { id: exists.id },
-        data: {
-          passwordHash: hash,
-          role:         u.role, // ensure role is correct too
-          dept:         u.dept,
-        }
-      });
-      process.stdout.write(`   ↩  ${u.empId.padEnd(14)} updated (password reset)\n`);
-      skipped++;
-      continue;
-    }
-
+    const role = resolveRole(u);
     await prisma.user.create({
       data: {
         empId:        u.empId,
         name:         u.name,
-        email:        emailLower,
+        email:        u.email.toLowerCase(),
         passwordHash: hash,
-        role:         u.role,
+        role,
         dept:         u.dept,
         designation:  u.designation || null,
         location:     u.location   || null,
       },
     });
-    console.log(`   ✔  ${u.role.padEnd(8)} ${u.empId.padEnd(14)} ${u.name.padEnd(38)} ${u.email}`);
+    process.stdout.write(`   ✔  ${role.padEnd(14)} ${u.empId.padEnd(14)} ${u.name}\n`);
     created++;
   }
 
-  console.log(`\n✅  Done: ${created} created, ${skipped} skipped.\n`);
-  console.log("🔑  Login reference:");
-  console.log("   Employees/RM/HOD → Gmail from Excel  | FirstName@123");
-  console.log("   DeptHODs         → dept@rts.com      | Dept@123");
-  console.log("                      software@rts.com  | Software@123");
-  console.log("   Admin            → admin@rts.com     | Admin@123\n");
+  console.log(`\n✅  Done: ${created} users created.`);
+
+  // ── Second pass: assign rmEmpId and hodEmpId ────────────────────────────
+  console.log("\n🔗  Assigning RM / HOD links...");
+
+  // Fetch all seeded users grouped by dept
+  const allUsers = await prisma.user.findMany({
+    select: { empId: true, role: true, dept: true, location: true },
+  });
+
+  // Build lookup maps per department
+  const hodsByDept = {};   // dept → empId (first HOD found)
+  const rmsByDeptLoc = {}; // dept|location → empId (location-matched RM first)
+  const rmsByDept = {};    // dept → empId (fallback: any RM in dept)
+
+  for (const u of allUsers) {
+    if (u.role === "HOD") {
+      if (!hodsByDept[u.dept]) hodsByDept[u.dept] = u.empId;
+    }
+    if (u.role === "RM") {
+      const key = `${u.dept}|${u.location}`;
+      if (!rmsByDeptLoc[key]) rmsByDeptLoc[key] = u.empId;
+      if (!rmsByDept[u.dept]) rmsByDept[u.dept] = u.empId;
+    }
+  }
+
+  let linked = 0;
+  for (const u of allUsers) {
+    // HODs, DeptHODs, Admins don't need rm/hod links
+    if (["HOD", "DeptHOD", "Admin", "Management"].includes(u.role)) continue;
+
+    const hodEmpId = hodsByDept[u.dept] || null;
+    const rmKey    = `${u.dept}|${u.location}`;
+    const rmEmpId  = u.role === "RM"
+      ? null  // RMs report to HOD, not another RM
+      : (rmsByDeptLoc[rmKey] || rmsByDept[u.dept] || null);
+
+    if (hodEmpId || rmEmpId) {
+      await prisma.user.update({
+        where: { empId: u.empId },
+        data:  { hodEmpId, rmEmpId },
+      });
+      linked++;
+    }
+  }
+
+  console.log(`✅  Linked ${linked} users to their RM / HOD.\n`);
+  console.log("🔑  All passwords: Test@123");
+  console.log("   DeptHODs  → dept@rts.com  (e.g. academic@rts.com)");
+  console.log("   Admin     → admin@rts.com\n");
 }
 
 main()
