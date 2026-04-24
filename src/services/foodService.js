@@ -100,12 +100,16 @@ class FoodService {
   }
 
   async getCalendar(empId, month, year) {
-    const sub = await prisma.foodSubscription.findUnique({ where: { empId } });
-    const cancellations = await prisma.foodCancellation.findMany({ where: { empId } });
-    const holidays = await prisma.holiday.findMany();
-
     const startDate = new Date(year, month - 1, 1);
     const endDate = new Date(year, month, 0); // Last day of month
+
+    const sub = await prisma.foodSubscription.findUnique({ where: { empId } });
+    const cancellations = await prisma.foodCancellation.findMany({
+      where: { empId, weekStartDate: { gte: startDate, lte: endDate } },
+    });
+    const holidays = await prisma.holiday.findMany({
+      where: { date: { gte: startDate, lte: endDate } },
+    });
     
     const days = [];
     const curr = new Date(startDate);
