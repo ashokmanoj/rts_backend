@@ -42,8 +42,9 @@ class AuthService {
       const tempToken = jwt.sign(
         { userId: user.id, empId: user.empId, name: user.name, location: user.location, type: "temp" },
         process.env.JWT_SECRET,
-        { expiresIn: "10m" }
+        { expiresIn: "10m", algorithm: "HS256" }
       );
+
       return {
         needsRoleSelection: true,
         tempToken,
@@ -67,6 +68,7 @@ class AuthService {
 
     const token = jwt.sign(payload, process.env.JWT_SECRET, {
       expiresIn: process.env.JWT_EXPIRES_IN || "7d",
+      algorithm: "HS256",
     });
 
     return { token, user: payload };
@@ -84,6 +86,7 @@ class AuthService {
     const payload = { userId, empId, name: user.name, role, dept, location: user.location };
     const token = jwt.sign(payload, process.env.JWT_SECRET, {
       expiresIn: process.env.JWT_EXPIRES_IN || "7d",
+      algorithm: "HS256",
     });
     return { token, user: { ...payload, availableRoles } };
   }
@@ -100,6 +103,7 @@ class AuthService {
     const payload = { userId: user.id, empId, name: user.name, role, dept, location: user.location };
     const token = jwt.sign(payload, process.env.JWT_SECRET, {
       expiresIn: process.env.JWT_EXPIRES_IN || "7d",
+      algorithm: "HS256",
     });
     return { token, user: { ...payload, availableRoles } };
   }

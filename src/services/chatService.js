@@ -13,7 +13,7 @@ class ChatService {
   buildFileUrl(req, filename) {
     if (!filename) return null;
     const base = process.env.SERVER_URL ? process.env.SERVER_URL.replace(/\/$/, "") : `${req.protocol}://${req.get("host")}`;
-    return `${base}/uploads/${filename}`;
+    return `${base}/api/files/${filename}`;
   }
 
   async getMessages(requestId) {

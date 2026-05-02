@@ -463,31 +463,51 @@ async function main() {
   });
 
   // Build lookup maps per department
-  const hodsByDept = {};   // dept → empId (first HOD found)
-  const rmsByDeptLoc = {}; // dept|location → empId (location-matched RM first)
-  const rmsByDept = {};    // dept → empId (fallback: any RM in dept)
+  const hodsByDept     = {};  // dept → empId of HOD (falls back to DeptHOD if no HOD)
+  const deptHodsByDept = {};  // dept → empId of DeptHOD (for linking HODs upward)
+  const rmsByDeptLoc   = {};  // dept|location → empId (location-matched RM first)
+  const rmsByDept      = {};  // dept → empId (fallback: any RM in dept)
 
+  // Pass 1: collect DeptHODs and HODs
   for (const u of allUsers) {
+    if (u.role === "DeptHOD") {
+      if (!deptHodsByDept[u.dept]) deptHodsByDept[u.dept] = u.empId;
+    }
     if (u.role === "HOD") {
       if (!hodsByDept[u.dept]) hodsByDept[u.dept] = u.empId;
     }
     if (u.role === "RM") {
       const key = `${u.dept}|${u.location}`;
       if (!rmsByDeptLoc[key]) rmsByDeptLoc[key] = u.empId;
-      if (!rmsByDept[u.dept]) rmsByDept[u.dept] = u.empId;
+      if (!rmsByDept[u.dept])  rmsByDept[u.dept]  = u.empId;
     }
+  }
+
+  // Pass 2: for depts with no explicit HOD, fall back to DeptHOD
+  for (const dept of Object.keys(deptHodsByDept)) {
+    if (!hodsByDept[dept]) hodsByDept[dept] = deptHodsByDept[dept];
   }
 
   let linked = 0;
   for (const u of allUsers) {
-    // HODs, DeptHODs, Admins don't need rm/hod links
-    if (["HOD", "DeptHOD", "Admin", "Management"].includes(u.role)) continue;
+    // DeptHOD, Admin, Management sit at the top — no rm/hod links needed
+    if (["DeptHOD", "Admin", "Management"].includes(u.role)) continue;
 
-    const hodEmpId = hodsByDept[u.dept] || null;
-    const rmKey    = `${u.dept}|${u.location}`;
-    const rmEmpId  = u.role === "RM"
-      ? null  // RMs report to HOD, not another RM
-      : (rmsByDeptLoc[rmKey] || rmsByDept[u.dept] || null);
+    let hodEmpId = null;
+    let rmEmpId  = null;
+
+    if (u.role === "HOD") {
+      // HODs report directly to their DeptHOD — no RM above them
+      hodEmpId = deptHodsByDept[u.dept] || null;
+    } else if (u.role === "RM") {
+      // RMs report to HOD (or DeptHOD when no HOD), no RM above them
+      hodEmpId = hodsByDept[u.dept] || null;
+    } else {
+      // Requestors, HR, FoodCommittee, Intern, etc. → RM + HOD
+      const rmKey = `${u.dept}|${u.location}`;
+      rmEmpId  = rmsByDeptLoc[rmKey] || rmsByDept[u.dept] || null;
+      hodEmpId = hodsByDept[u.dept]  || null;
+    }
 
     if (hodEmpId || rmEmpId) {
       await prisma.user.update({

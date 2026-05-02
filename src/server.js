@@ -10,6 +10,7 @@
 require("dotenv").config();
 const app = require("./app");
 const prisma = require("./config/database");
+app.disable("x-powered-by"); // Hide Express header for security
 
 const PORT = process.env.PORT || 5000;
 

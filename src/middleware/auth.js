@@ -12,7 +12,7 @@ function authenticate(req, res, next) {
 
   const token = header.split(" ")[1];
   try {
-    const payload = jwt.verify(token, process.env.JWT_SECRET);
+    const payload = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ["HS256"] });
     if (payload.type === "temp") {
       return res.status(401).json({ error: "Role selection required." });
     }
@@ -35,8 +35,9 @@ function authenticateTemp(req, res, next) {
 
   const token = header.split(" ")[1];
   try {
-    const payload = jwt.verify(token, process.env.JWT_SECRET);
-    if (payload.type !== "temp") {
+    const payload = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ["HS256"] });
+    if (payload.type === "temp") {
+
       return res.status(401).json({ error: "Invalid token type." });
     }
     req.user = payload;
@@ -70,4 +71,42 @@ function authorizeHODReport(req, res, next) {
   next();
 }
 
-module.exports = { authenticate, authenticateTemp, authorize, authorizeHODReport };
+/**
+ * Ensures the user has permission to view/interact with a specific request.
+ */
+async function authorizeRequestAccess(req, res, next) {
+  const prisma = require("../config/database");
+  const requestId = Number(req.params.id || req.body.requestId);
+  if (!requestId) return next();
+
+  try {
+    const request = await prisma.request.findUnique({
+      where: { id: requestId },
+      select: { empId: true, dept: true, assignedDept: true }
+    });
+
+    if (!request) return res.status(404).json({ error: "Request not found." });
+
+    const { role, empId, dept: userDept } = req.user;
+    
+    // Admin and Management see everything
+    if (["Admin", "Management"].includes(role)) return next();
+
+    // Owner can see it
+    if (request.empId === empId) return next();
+
+    // If user is RM/HOD/DeptHOD of the owner's dept or the assigned dept
+    if (["RM", "HOD", "DeptHOD"].includes(role)) {
+      if (request.dept === userDept || request.assignedDept === userDept) return next();
+    }
+
+    // Team members of the assigned department can see it (if not same dept as owner, they see it as "received")
+    if (request.assignedDept === userDept) return next();
+
+    return res.status(403).json({ error: "Access denied to this request." });
+  } catch (error) {
+    next(error);
+  }
+}
+
+module.exports = { authenticate, authenticateTemp, authorize, authorizeHODReport, authorizeRequestAccess };

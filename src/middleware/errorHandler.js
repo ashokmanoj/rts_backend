@@ -5,6 +5,8 @@
 function errorHandler(err, req, res, next) {  // eslint-disable-line no-unused-vars
   console.error(`[ERROR] ${req.method} ${req.path} —`, err.message);
 
+  const isDev = process.env.NODE_ENV === "development";
+
   // Multer file-size error
   if (err.code === "LIMIT_FILE_SIZE") {
     return res.status(413).json({
@@ -13,7 +15,13 @@ function errorHandler(err, req, res, next) {  // eslint-disable-line no-unused-v
   }
 
   const status = err.status || 500;
-  res.status(status).json({ error: err.message || "Internal server error." });
+  
+  // Only show detailed error message if in development or if it's a client error (4xx)
+  const errorMessage = (isDev || status < 500) 
+    ? (err.message || "Internal server error.") 
+    : "Internal server error.";
+
+  res.status(status).json({ error: errorMessage });
 }
 
 module.exports = errorHandler;

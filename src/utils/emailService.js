@@ -6,12 +6,9 @@ const { readFile, instantiateFromTemplate } = require('./mailUtils');
 const config = require('./mailConfig');
 
 const sendPasswordResetEmail = async (email, userName, token) => {
-  console.log('email', email);
-
   const fullName = userName || 'User';
   const name = 'RTS'; // System name
 
-  console.log('sending email');
   let link = `${process.env.FRONTEND_URL}/reset-password/${token}`;
   let htmlFile = path.join(__dirname, 'ResetPassword.html');
   let contents = readFile(htmlFile);

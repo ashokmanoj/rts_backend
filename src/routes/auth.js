@@ -12,8 +12,17 @@ const resetLimiter = rateLimit({
   message:         { error: "Too many requests. Please try again in 15 minutes." },
 });
 
+// 10 attempts per 15 min per IP — for login
+const loginLimiter = rateLimit({
+  windowMs:        15 * 60 * 1000,
+  max:             10,
+  standardHeaders: true,
+  legacyHeaders:   false,
+  message:         { error: "Too many login attempts. Please try again in 15 minutes." },
+});
+
 // POST /api/auth/login
-router.post("/login", login);
+router.post("/login", loginLimiter, login);
 
 // POST /api/auth/select-role  — requires temp token (multi-role users after login)
 router.post("/select-role", authenticateTemp, selectRole);

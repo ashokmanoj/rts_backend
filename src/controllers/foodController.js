@@ -107,9 +107,16 @@ async function downloadReport(req, res, next) {
     const filterDept = (role === 'DeptHOD' && ['HR', 'Food Committee'].includes(dept)) ? null : dept;
     const report = await foodService.getReport(filterDept, req.query);
 
+    // CSV Injection protection: Escape fields starting with =, +, -, @
+    const escapeCSV = (val) => {
+      const stringVal = String(val ?? "");
+      if (/^[=\+\-@]/.test(stringVal)) return `'${stringVal}`;
+      return stringVal;
+    };
+
     let csv = "Name,Emp ID,Dept,Location,Period,Working Days,Total Amount\n";
     report.data.forEach(u => {
-      csv += `"${u.name}","${u.empId}","${u.dept}","${u.location || ""}","${u.period}","${u.workingDays}","${u.totalAmount}"\n`;
+      csv += `"${escapeCSV(u.name)}","${escapeCSV(u.empId)}","${escapeCSV(u.dept)}","${escapeCSV(u.location)}","${escapeCSV(u.period)}","${u.workingDays}","${u.totalAmount}"\n`;
     });
 
     res.setHeader("Content-Type", "text/csv");

@@ -1,6 +1,6 @@
 'use strict';
 
-const router = require('express').Router();
+const router = require('express').Router({ caseSensitive: true });
 const { authenticate, authorizeHODReport } = require('../middleware/auth');
 const {
   subscribe,

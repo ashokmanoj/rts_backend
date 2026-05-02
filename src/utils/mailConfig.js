@@ -10,8 +10,8 @@ let config = {
       pass: process.env.MAILER_PASS || process.env.SMTP_PASS
     },
     tls: {
-      // do not fail on invalid certs
-      rejectUnauthorized: false,
+      // Ensure we validate certificates for security
+      rejectUnauthorized: true,
     }
   },
 
