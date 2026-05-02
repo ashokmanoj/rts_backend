@@ -22,6 +22,9 @@ function formatRequest(row, viewerEmpId) {
     fileUrl:        row.fileUrl            ?? null,
     fileName:       row.fileName           ?? null,
 
+    // Role the requestor was acting as when they created the request
+    requestorRole:  row.requestorRole  ?? null,
+
     // Approval statuses — RM / HOD / DeptHOD
     rmStatus:       row.rmStatus,
     rmDate:         pad(row.rmDate),

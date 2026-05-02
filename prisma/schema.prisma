@@ -20,6 +20,7 @@ enum Role {
   Admin
   HR
   FoodCommittee
+  Intern
 }
 
 enum MessageType {
@@ -64,8 +65,21 @@ model User {
   loginLogs         LoginLog[]
   foodSubscription  FoodSubscription?
   foodCancellations FoodCancellation[]
+  userRoles         UserRole[]
 
   @@map("users")
+}
+
+model UserRole {
+  id    Int    @id @default(autoincrement())
+  empId String @map("emp_id")
+  role  Role
+  dept  String
+
+  user  User   @relation(fields: [empId], references: [empId], onDelete: Cascade)
+
+  @@unique([empId, role, dept])
+  @@map("user_roles")
 }
 
 model LoginLog {
@@ -90,6 +104,7 @@ model Request {
   fileName       String?   @map("file_name")
   dept           String
   assignedDept   String    @map("assigned_dept")
+  requestorRole  String?   @map("requestor_role")
   rmStatus       String    @default("--") @map("rm_status")
   rmDate         DateTime? @map("rm_date")
   hodStatus      String    @default("--") @map("hod_status")

@@ -65,13 +65,15 @@ function getNextNextWeekStart(date) {
   return getNextWeekStart(getNextWeekStart(date));
 }
 
-function calculateWorkingDays(startDate, endDate, holidays = [], cancelledWeekStarts = [], suspendedFrom = null) {
+function calculateWorkingDays(startDate, endDate, holidays = [], cancelledWeekStarts = [], suspendedFrom = null, subStartDate = null) {
   const days = getDaysInRange(startDate, endDate);
-  const suspDateStr = suspendedFrom ? toDateString(new Date(suspendedFrom)) : null;
+  const suspDateStr     = suspendedFrom  ? toDateString(new Date(suspendedFrom))  : null;
+  const subStartDateStr = subStartDate   ? toDateString(new Date(subStartDate))   : null;
   let count = 0;
 
   for (const day of days) {
     if (isNonWorkingDay(day, holidays)) continue;
+    if (subStartDateStr && toDateString(getWeekStart(day)) < subStartDateStr) continue; // before subscription start week
     if (suspDateStr && toDateString(day) >= suspDateStr) continue;
 
     const weekStartStr = toDateString(getWeekStart(day));
@@ -86,16 +88,18 @@ function calculateWorkingDays(startDate, endDate, holidays = [], cancelledWeekSt
   return count;
 }
 
-// Window open: Monday through Saturday of next week before 6 PM IST
-// Window closes Saturday of the upcoming/next week at 6 PM
-// Closed only on: Sunday AND Saturday after 6 PM
+// Window open: Monday through Saturday all day + Sunday before 10:30 AM IST
+// Closes Sunday at 10:30 AM IST (food already ordered for next week)
 function canCancelNow() {
   const now  = getNowIST();
-  const day  = now.getDay();
+  const day  = now.getDay();   // 0=Sun, 6=Sat
   const hour = now.getHours();
-  if (day === 0) return false;               // Sunday — closed
-  if (day === 6 && hour >= 18) return false; // Saturday after 6 PM — closed
-  return true;                               // Mon–Sat before 6 PM — open
+  const min  = now.getMinutes();
+  if (day === 0) {
+    // Sunday: open only before 10:30 AM IST
+    return hour < 10 || (hour === 10 && min < 30);
+  }
+  return true; // Mon–Sat: always open
 }
 
 module.exports = {

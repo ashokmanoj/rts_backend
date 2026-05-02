@@ -119,16 +119,18 @@ class RequestService {
 
   async create(user, data, uploadedFile, req) {
     const { purpose, description, assignedDept } = data;
+
     const request = await prisma.request.create({
       data: {
-        empId: user.empId,
+        empId:         user.empId,
         purpose,
-        description: description || "",
-        fileUrl: uploadedFile ? this.buildFileUrl(req, uploadedFile.filename) : null,
-        fileName: uploadedFile ? uploadedFile.originalname : null,
-        dept: user.dept,
-        assignedDept: assignedDept || user.dept,
-        readReceipts: { create: { empId: user.empId } }
+        description:   description || "",
+        fileUrl:       uploadedFile ? this.buildFileUrl(req, uploadedFile.filename) : null,
+        fileName:      uploadedFile ? uploadedFile.originalname : null,
+        dept:          user.dept,
+        assignedDept:  assignedDept || user.dept,
+        requestorRole: user.role,
+        readReceipts:  { create: { empId: user.empId } },
       },
       include: WITH_OWNER,
     });
@@ -147,14 +149,9 @@ class RequestService {
     let updateData = {};
     if (decision === "Checking") updateData.assignedStatus = "Checking";
 
-    const isSpecialRequest = ["RM", "HOD", "DeptHOD"].includes(existing.owner.role);
-
     if (decision === "Forwarded") {
       if (!newDept) throw new Error("newDept is required when forwarding.");
       updateData = { ...updateData, forwarded: true, forwardedBy: user.name, forwardedAt: now, assignedDept: newDept };
-    } else if (isSpecialRequest) {
-      if (user.role !== "Management") throw new Error("Special request can only be approved by Management.");
-      updateData = { ...updateData, deptHodStatus: decision, deptHodDate: now };
     } else if (["RM", "HOD", "DeptHOD", "Management"].includes(user.role)) {
       const field = user.role === "RM" ? "rmStatus" : user.role === "HOD" ? "hodStatus" : "deptHodStatus";
       const dateField = user.role === "RM" ? "rmDate" : user.role === "HOD" ? "hodDate" : "deptHodDate";
@@ -215,6 +212,63 @@ class RequestService {
 
     const closureText = note ? `🔒 Ticket closed by ${user.name} (${user.dept})\n\nResolution note: ${note} ` : `🔒 Ticket closed by ${user.name} (${user.dept})`;
     await prisma.chatMessage.create({ data: { requestId: reqId, authorId: user.empId, author: user.name, role: user.role, type: "system", text: closureText, fileUrl: fUrl, fileName: fName, isImage: isImg } });
+
+    return formatRequest(updated, user.empId);
+  }
+
+  async getHodPendingRequests(user) {
+    const requests = await prisma.request.findMany({
+      where: {
+        requestorRole: "HOD",
+        hodStatus:     { in: ["--", "Checking"] },
+        rmStatus:      { not: "Rejected" },
+        isClosed:      false,
+      },
+      include: WITH_OWNER,
+      orderBy: { createdAt: "desc" },
+    });
+    return requests.map(r => formatRequest(r, user.empId));
+  }
+
+  async hodApproval(reqId, user, body) {
+    const { decision, comment } = body;
+    if (!["Approved", "Rejected"].includes(decision)) {
+      throw new Error("Decision must be Approved or Rejected.");
+    }
+
+    const existing = await prisma.request.findUnique({ where: { id: reqId }, include: { owner: true } });
+    if (!existing) throw new Error("Request not found.");
+    if (existing.isClosed) throw new Error("Cannot update a closed ticket.");
+
+    const now = new Date();
+
+    await prisma.requestRead.deleteMany({ where: { requestId: reqId, empId: { not: user.empId } } });
+    await prisma.requestRead.upsert({
+      where: { requestId_empId: { requestId: reqId, empId: user.empId } },
+      update: {},
+      create: { requestId: reqId, empId: user.empId },
+    });
+
+    const updated = await prisma.request.update({
+      where: { id: reqId },
+      data: { hodStatus: decision, hodDate: now },
+      include: WITH_OWNER,
+    });
+
+    await prisma.chatMessage.create({
+      data: {
+        requestId: reqId,
+        authorId:  user.empId,
+        author:    user.name,
+        role:      user.role,
+        type:      "approval",
+        text:      comment || `${decision} the request.`,
+        status:    decision,
+        purpose:   updated.purpose,
+        changedDept:  null,
+        originalDept: existing.assignedDept,
+      },
+    });
 
     return formatRequest(updated, user.empId);
   }

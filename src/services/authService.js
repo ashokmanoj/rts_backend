@@ -18,25 +18,13 @@ class AuthService {
   async login(email, password) {
     const user = await prisma.user.findUnique({
       where: { email: email.trim().toLowerCase() },
+      include: { userRoles: { select: { role: true, dept: true } } },
     });
 
-    if (!user) throw new Error("Invalid credentials.");
+    if (!user || !user.isActive) throw new Error("Invalid credentials.");
 
     const match = await bcrypt.compare(password, user.passwordHash);
     if (!match) throw new Error("Invalid credentials.");
-
-    const payload = {
-      userId:   user.id,
-      empId:    user.empId,
-      name:     user.name,
-      role:     user.role,
-      dept:     user.dept,
-      location: user.location,
-    };
-
-    const token = jwt.sign(payload, process.env.JWT_SECRET, {
-      expiresIn: process.env.JWT_EXPIRES_IN || "7d",
-    });
 
     const now = new Date();
     await prisma.$transaction([
@@ -49,7 +37,71 @@ class AuthService {
       }),
     ]);
 
+    // Multiple roles → require selection before issuing a full token
+    if (user.userRoles.length > 1) {
+      const tempToken = jwt.sign(
+        { userId: user.id, empId: user.empId, name: user.name, location: user.location, type: "temp" },
+        process.env.JWT_SECRET,
+        { expiresIn: "10m" }
+      );
+      return {
+        needsRoleSelection: true,
+        tempToken,
+        availableRoles: user.userRoles,
+      };
+    }
+
+    // Single role: use UserRole entry if present, else fall back to user.role/dept
+    const activeRole = user.userRoles.length === 1
+      ? { role: user.userRoles[0].role, dept: user.userRoles[0].dept }
+      : { role: user.role, dept: user.dept };
+
+    const payload = {
+      userId:   user.id,
+      empId:    user.empId,
+      name:     user.name,
+      role:     activeRole.role,
+      dept:     activeRole.dept,
+      location: user.location,
+    };
+
+    const token = jwt.sign(payload, process.env.JWT_SECRET, {
+      expiresIn: process.env.JWT_EXPIRES_IN || "7d",
+    });
+
     return { token, user: payload };
+  }
+
+  async selectRole(userId, empId, role, dept) {
+    const userRole = await prisma.userRole.findFirst({ where: { empId, role, dept } });
+    if (!userRole) throw new Error("Invalid role selection.");
+
+    const [user, availableRoles] = await Promise.all([
+      prisma.user.findUnique({ where: { empId } }),
+      prisma.userRole.findMany({ where: { empId }, select: { role: true, dept: true } }),
+    ]);
+
+    const payload = { userId, empId, name: user.name, role, dept, location: user.location };
+    const token = jwt.sign(payload, process.env.JWT_SECRET, {
+      expiresIn: process.env.JWT_EXPIRES_IN || "7d",
+    });
+    return { token, user: { ...payload, availableRoles } };
+  }
+
+  async switchRole(empId, role, dept) {
+    const userRole = await prisma.userRole.findFirst({ where: { empId, role, dept } });
+    if (!userRole) throw new Error("Invalid role selection.");
+
+    const [user, availableRoles] = await Promise.all([
+      prisma.user.findUnique({ where: { empId } }),
+      prisma.userRole.findMany({ where: { empId }, select: { role: true, dept: true } }),
+    ]);
+
+    const payload = { userId: user.id, empId, name: user.name, role, dept, location: user.location };
+    const token = jwt.sign(payload, process.env.JWT_SECRET, {
+      expiresIn: process.env.JWT_EXPIRES_IN || "7d",
+    });
+    return { token, user: { ...payload, availableRoles } };
   }
 
   async logout(empId) {
@@ -133,7 +185,10 @@ class AuthService {
   async getUserById(empId) {
     return prisma.user.findUnique({
       where: { empId },
-      select: { id: true, empId: true, name: true, role: true, dept: true, location: true },
+      select: {
+        id: true, empId: true, name: true, role: true, dept: true, location: true,
+        userRoles: { select: { role: true, dept: true } },
+      },
     });
   }
 }

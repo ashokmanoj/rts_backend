@@ -80,4 +80,26 @@ async function close(req, res, next) {
   }
 }
 
-module.exports = { getAll, getFilterOptions, create, approval, markSeen, markUnread, close };
+async function getHodPending(req, res, next) {
+  try {
+    const result = await requestService.getHodPendingRequests(req.user);
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function hodApproval(req, res, next) {
+  try {
+    const reqId = Number(req.params.id);
+    if (!req.body.decision) return res.status(400).json({ error: "decision is required." });
+    const result = await requestService.hodApproval(reqId, req.user, req.body);
+    res.json(result);
+  } catch (err) {
+    if (err.message.includes("not found")) return res.status(404).json({ error: err.message });
+    if (err.message.includes("Unauthorized") || err.message.includes("must be Approved")) return res.status(403).json({ error: err.message });
+    next(err);
+  }
+}
+
+module.exports = { getAll, getFilterOptions, create, approval, markSeen, markUnread, close, getHodPending, hodApproval };

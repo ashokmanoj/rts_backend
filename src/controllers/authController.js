@@ -45,8 +45,41 @@ async function me(req, res, next) {
   try {
     const user = await authService.getUserById(req.user.empId);
     if (!user) return res.status(404).json({ error: "User not found" });
-    res.json({ user: { userId: user.id, ...user } });
+    const { userRoles, ...rest } = user;
+    res.json({
+      user: {
+        userId:         user.id,
+        ...rest,
+        role:           req.user.role,   // use JWT-selected role, not DB default
+        dept:           req.user.dept,   // use JWT-selected dept, not DB default
+        availableRoles: userRoles,       // all role/dept pairs for this user
+      },
+    });
   } catch (err) {
+    next(err);
+  }
+}
+
+async function selectRole(req, res, next) {
+  try {
+    const { role, dept } = req.body;
+    if (!role || !dept) return res.status(400).json({ error: "role and dept are required." });
+    const result = await authService.selectRole(req.user.userId, req.user.empId, role, dept);
+    res.json(result);
+  } catch (err) {
+    if (err.message === "Invalid role selection.") return res.status(403).json({ error: err.message });
+    next(err);
+  }
+}
+
+async function switchRole(req, res, next) {
+  try {
+    const { role, dept } = req.body;
+    if (!role || !dept) return res.status(400).json({ error: "role and dept are required." });
+    const result = await authService.switchRole(req.user.empId, role, dept);
+    res.json(result);
+  } catch (err) {
+    if (err.message === "Invalid role selection.") return res.status(403).json({ error: err.message });
     next(err);
   }
 }
@@ -78,4 +111,4 @@ async function resetPassword(req, res, next) {
   }
 }
 
-module.exports = { login, me, logout, heartbeat, forgotPassword, resetPassword };
+module.exports = { login, me, selectRole, switchRole, logout, heartbeat, forgotPassword, resetPassword };

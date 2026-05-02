@@ -10,7 +10,7 @@
  */
 
 require('dotenv').config();
-const prisma = require('./prisma');
+const prisma = require('../config/database');
 
 const HOLIDAYS = [
   // ── 2025 ──────────────────────────────────────────────────────────────────

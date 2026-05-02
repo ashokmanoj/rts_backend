@@ -1,7 +1,7 @@
 const router = require("express").Router({ caseSensitive: true });
 const ctrl = require("../controllers/requestController");
 const chatCtrl = require("../controllers/chatController");
-const { authenticate } = require("../middleware/auth");
+const { authenticate, authorize } = require("../middleware/auth");
 const upload = require("../middleware/upload");
 
 // All routes require authentication
@@ -14,6 +14,10 @@ router.get("/", ctrl.getAll);
 
 // GET unique filter options
 router.get("/filters", ctrl.getFilterOptions);
+
+// ── Management Portal: HOD-pending requests & HOD-level approval ──────────
+router.get("/hod-pending", authorize("Management"), ctrl.getHodPending);
+router.patch("/:id/hod-approval", authorize("Management"), ctrl.hodApproval);
 
 // CREATE request (with optional file)
 router.post("/", upload.single("file"), ctrl.create);

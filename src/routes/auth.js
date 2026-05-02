@@ -1,7 +1,7 @@
 const router      = require("express").Router({ caseSensitive: true });
 const rateLimit   = require("express-rate-limit");
-const { login, me, logout, heartbeat, forgotPassword, resetPassword } = require("../controllers/authController");
-const { authenticate } = require("../middleware/auth");
+const { login, me, selectRole, switchRole, logout, heartbeat, forgotPassword, resetPassword } = require("../controllers/authController");
+const { authenticate, authenticateTemp } = require("../middleware/auth");
 
 // 5 attempts per 15 min per IP — applied only to the password-reset routes
 const resetLimiter = rateLimit({
@@ -14,6 +14,12 @@ const resetLimiter = rateLimit({
 
 // POST /api/auth/login
 router.post("/login", login);
+
+// POST /api/auth/select-role  — requires temp token (multi-role users after login)
+router.post("/select-role", authenticateTemp, selectRole);
+
+// POST /api/auth/switch-role  — requires full token (already logged in)
+router.post("/switch-role", authenticate, switchRole);
 
 // POST /api/auth/logout (protected)
 router.post("/logout", authenticate, logout);

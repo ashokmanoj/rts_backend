@@ -1,9 +1,9 @@
 /**
  * scripts/addManagementUser.js
  * ─────────────────────────────────────────────────────────────────────────────
- * Run once to create the Management login if it doesn't exist yet.
+ * Creates the dedicated HOD-request management login account.
  *
- * Usage:
+ * Usage (run once from rts_backend/):
  *   node scripts/addManagementUser.js
  * ─────────────────────────────────────────────────────────────────────────────
  */
@@ -14,20 +14,13 @@ require("dotenv").config();
 const bcrypt = require("bcryptjs");
 const prisma  = require("../src/config/database");
 
-/*************  ✨ Windsurf Command ⭐  *************/
-/**
- * Main function to create the Management user if it doesn't exist yet.
- *
- * @returns {Promise<void>} Resolves when the user is created or already exists.
- */
-/*******  ba35057b-40d3-4d6a-9811-d151c946deb6  *******/
 async function main() {
-  const email    = "management@rts.com";
+  const email    = "managehodreq@rts.com";
   const password = "Management@123";
 
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {
-    console.log("✅  Management user already exists:", existing.empId);
+    console.log("✅  HOD-request management user already exists:", existing.empId);
     return;
   }
 
@@ -36,20 +29,20 @@ async function main() {
   const user = await prisma.user.create({
     data: {
       empId:        "MGMT-001",
-      name:         "Director General",
+      name:         "HOD Request Manager",
       email,
       passwordHash: hash,
       role:         "Management",
       dept:         "Management",
-      designation:  "Director",
+      designation:  "Management Admin",
       location:     "HQ",
     },
   });
 
-  console.log("✅  Management user created:");
+  console.log("✅  HOD-request management user created:");
   console.log("    Email   :", user.email);
   console.log("    EmpId   :", user.empId);
-  console.log("    Password: Management@123");
+  console.log("    Password:", password);
   console.log("    Role    :", user.role);
 }
 
