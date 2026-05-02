@@ -24,6 +24,26 @@ function authenticate(req, res, next) {
 }
 
 /**
+ * Soft auth for logout — decodes any token (including expired/temp) without
+ * rejecting the request. Logout must always succeed client-side.
+ */
+function authenticateLogout(req, res, next) {
+  const header = req.headers.authorization;
+  if (!header || !header.startsWith("Bearer ")) {
+    req.user = {};
+    return next();
+  }
+  const token = header.split(" ")[1];
+  try {
+    req.user = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ["HS256"] });
+  } catch {
+    // Decode without verification so empId is available even for expired tokens
+    req.user = jwt.decode(token) || {};
+  }
+  next();
+}
+
+/**
  * Accepts ONLY the short-lived temp token issued when a user has multiple roles.
  * Used exclusively by POST /auth/select-role.
  */
@@ -36,8 +56,7 @@ function authenticateTemp(req, res, next) {
   const token = header.split(" ")[1];
   try {
     const payload = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ["HS256"] });
-    if (payload.type === "temp") {
-
+    if (payload.type !== "temp") {
       return res.status(401).json({ error: "Invalid token type." });
     }
     req.user = payload;
@@ -109,4 +128,4 @@ async function authorizeRequestAccess(req, res, next) {
   }
 }
 
-module.exports = { authenticate, authenticateTemp, authorize, authorizeHODReport, authorizeRequestAccess };
+module.exports = { authenticate, authenticateTemp, authenticateLogout, authorize, authorizeHODReport, authorizeRequestAccess };

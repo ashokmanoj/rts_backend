@@ -25,7 +25,7 @@ async function login(req, res, next) {
 
 async function logout(req, res, next) {
   try {
-    await authService.logout(req.user.empId);
+    if (req.user?.empId) await authService.logout(req.user.empId);
     res.json({ success: true });
   } catch (err) {
     next(err);
