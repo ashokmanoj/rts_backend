@@ -10,6 +10,7 @@
 require("dotenv").config();
 const app = require("./app");
 const prisma = require("./config/database");
+const { startFoodReminderCron } = require("./utils/foodReminder");
 app.disable("x-powered-by"); // Hide Express header for security
 
 const PORT = process.env.PORT || 5000;
@@ -18,6 +19,7 @@ const PORT = process.env.PORT || 5000;
 prisma.$connect()
   .then(() => {
     console.log("✅ Database connected via Prisma");
+    startFoodReminderCron();
     app.listen(PORT, "0.0.0.0", () => {
       console.log(`\n🚀 RTS Backend running on http://0.0.0.0:${PORT}`);
       console.log(`    Local:   http://localhost:${PORT}`);

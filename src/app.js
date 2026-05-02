@@ -19,6 +19,7 @@ const requestRoutes= require("./routes/requests");
 const adminRoutes  = require("./routes/admin");
 const foodRoutes   = require("./routes/food");
 const fileRoutes   = require("./routes/files");
+const pushRoutes   = require("./routes/push");
 
 const app = express();
 
@@ -91,6 +92,7 @@ app.use("/api/requests", requestRoutes);
 app.use("/api/admin",    adminRoutes);
 app.use("/api/food",     foodRoutes);
 app.use("/api/files",    fileRoutes);
+app.use("/api/push",     pushRoutes);
 
 // ── Health check ──────────────────────────────────────────────────────────────
 app.get("/api/health", (_req, res) =>

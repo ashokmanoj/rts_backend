@@ -66,6 +66,7 @@ model User {
   foodSubscription  FoodSubscription?
   foodCancellations FoodCancellation[]
   userRoles         UserRole[]
+  pushSubscriptions PushSubscription[]
 
   @@map("users")
 }
@@ -214,5 +215,19 @@ model Holiday {
   name String
 
   @@map("holidays")
+}
+
+model PushSubscription {
+  id        String   @id @default(uuid())
+  empId     String   @map("emp_id")
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [empId], references: [empId], onDelete: Cascade)
+
+  @@index([empId])
+  @@map("push_subscriptions")
 }
   
