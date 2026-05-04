@@ -46,6 +46,7 @@ const USER_ROLES = [
   { empId: "GN-1042", role: "RM",        dept: "Admin" },
   { empId: "GN-1042", role: "Requestor", dept: "HR"    },
   { empId: "GN-1042", role: "RM",        dept: "HR"    },
+  { empId: "GN-1042", role: "HOD",       dept: "HR"    },
 
 
   // ── Akhilesh B (G-1007) ──────────────────────────────────────────────────
@@ -57,8 +58,13 @@ const USER_ROLES = [
   { empId: "G-1007", role: "RM",        dept: "Broadcasting" },
   { empId: "G-1007", role: "Requestor", dept: "Management"   },
   { empId: "G-1007", role: "RM",        dept: "Purchase"     },
+  { empId: "G-1007", role: "HOD",       dept: "Purchase"     },
   { empId: "G-1007", role: "RM",        dept: "Store"        },
+  { empId: "G-1007", role: "HOD",       dept: "Store"        },
   { empId: "G-1007", role: "RM",        dept: "System admin" },
+  { empId: "G-1007", role: "HOD",       dept: "System admin" },
+  { empId: "G-1007", role: "HOD",       dept: "Broadcasting" },
+  
 
   // ── Vamsi Krishna Agnihotram (AC-1379) ───────────────────────────────────
   // Broadcasting:     Requestor=No,  RM=Yes
@@ -68,6 +74,9 @@ const USER_ROLES = [
   { empId: "AC-1379", role: "Requestor", dept: "Operation"         },
   { empId: "AC-1379", role: "RM",        dept: "Operation"         },
   { empId: "AC-1379", role: "RM",        dept: "Technical Support" },
+  { empId: "AC-1379", role: "HOD",       dept: "Operation" },
+  { empId: "AC-1379", role: "HOD",       dept: "Technical Support" },
+
 
   // ── Manjunatha (GN-1009) ─────────────────────────────────────────────────
   // Documantation: Requestor=No,  RM=Yes, HOD=Yes
@@ -75,6 +84,8 @@ const USER_ROLES = [
   { empId: "GN-1009", role: "RM",        dept: "Documantation" },
   { empId: "GN-1009", role: "Requestor", dept: "Operation"     },
   { empId: "GN-1009", role: "RM",        dept: "Operation"     },
+  { empId: "GN-1009", role: "HOD",       dept: "Operation"     },
+  { empId: "GN-1009", role: "HOD",       dept: "Documantation" },
   
   // ── Nithish V (AC-1030) ──────────────────────────────────────────────────
   // Animation: Requestor=No,  RM=Yes
@@ -82,6 +93,8 @@ const USER_ROLES = [
   { empId: "AC-1030", role: "RM",        dept: "Animation" },
   { empId: "AC-1030", role: "Requestor", dept: "Software"  },
   { empId: "AC-1030", role: "RM",        dept: "Software"  },
+  { empId: "AC-1030", role: "HOD",       dept: "Animation"  },
+  { empId: "AC-1030", role: "HOD",       dept: "Software"  },
   
 
   // ── Kishor Kumar Baishya (G-1136) ────────────────────────────────────────
@@ -104,6 +117,8 @@ const USER_ROLES = [
   { empId: "GN-1023", role: "RM",        dept: "Broadcasting" },
   { empId: "GN-1023", role: "Requestor", dept: "System admin" },
   { empId: "GN-1023", role: "RM",        dept: "System admin" },
+  { empId: "GN-1023", role: "HOD",       dept: "Broadcasting" },
+  { empId: "GN-1023", role: "HOD",       dept: "System admin" },
   // ── Santosh Kumar (G-1104) ───────────────────────────────────────────────
   // Software: Requestor=Yes, RM=Yes, DeptHOD=Yes
   { empId: "G-1104", role: "Requestor", dept: "Software" },
@@ -125,16 +140,19 @@ const USER_ROLES = [
   // Academic: Requestor=Yes, RM=Yes, DeptHOD=Yes
   { empId: "AC-1381", role: "Requestor", dept: "Academic" },
   { empId: "AC-1381", role: "RM",        dept: "Academic" },
+  { empId: "AC-1381", role: "HOD",       dept: "Academic" },
 
   // ── Pavan T V (AC-1133) ──────────────────────────────────────────────────
   // Accounts: Requestor=Yes, RM=Yes, DeptHOD=Yes
   { empId: "AC-1133", role: "Requestor", dept: "Accounts" },
   { empId: "AC-1133", role: "RM",        dept: "Accounts" },
+  { empId: "AC-1133", role: "HOD",       dept: "Accounts" },
 
   // ── Pruthvi Raj R (GN-1011) ──────────────────────────────────────────────
   // Animation: Requestor=Yes, RM=Yes, DeptHOD=Yes
   { empId: "GN-1011", role: "Requestor", dept: "Animation" },
   { empId: "GN-1011", role: "RM",        dept: "Animation" },
+  { empId: "GN-1011", role: "HOD",       dept: "Animation" },
 
   // ── SRIDHAR M N (GN-1015) ────────────────────────────────────────────────
   // Academic: Requestor=Yes, RM=Yes, HOD=Yes
