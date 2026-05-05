@@ -62,6 +62,10 @@ const allowedOrigins = [
   "http://localhost:5173",
   "http://127.0.0.1:5173",
   "http://192.168.1.128:5173",
+  "http://59.97.21.84",
+  "http://59.97.21.84:5173",
+  "https://telerts.com",
+  "https://www.telerts.com",
 ].filter(Boolean);
 
 app.use(cors({
