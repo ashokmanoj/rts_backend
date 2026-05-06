@@ -3,14 +3,13 @@
 const cron = require("node-cron");
 const { sendPushToAllFoodSubscribers } = require("./pushService");
 
-// Payload is identical on all 3 days — users decide by clicking Yes / No.
 const REMINDER_PAYLOAD = {
   title:              "🍱 Food Reminder",
   body:               "Have you sorted next week's food? Tap 'Yes' if you're all set, or 'No' to update your preference now.",
   icon:               "/icon-192.png",
   badge:              "/icon-192.png",
   tag:                "food-weekly-reminder",
-  requireInteraction: true,          // stays on screen until the user acts
+  requireInteraction: true,
   actions: [
     { action: "yes", title: "Yes, I'm done ✓" },
     { action: "no",  title: "No, take me there →" },
@@ -18,10 +17,25 @@ const REMINDER_PAYLOAD = {
   url: "/?tab=food",
 };
 
-async function fireReminder(day) {
-  console.log(`[FoodReminder] Sending ${day} 5 PM reminder...`);
+// Saturday 4 PM IST — status check for next week
+const SAT_STATUS_PAYLOAD = {
+  title:              "📋 Next Week Food Status",
+  body:               "Check your food status for next week — confirm or update your preference before the deadline!",
+  icon:               "/icon-192.png",
+  badge:              "/icon-192.png",
+  tag:                "food-sat-status",
+  requireInteraction: true,
+  actions: [
+    { action: "yes", title: "View Status →" },
+    { action: "no",  title: "Update Now →" },
+  ],
+  url: "/?tab=food",
+};
+
+async function fireReminder(day, payload = REMINDER_PAYLOAD) {
+  console.log(`[FoodReminder] Sending ${day} reminder...`);
   try {
-    await sendPushToAllFoodSubscribers(REMINDER_PAYLOAD);
+    await sendPushToAllFoodSubscribers(payload);
     console.log(`[FoodReminder] ${day} reminder sent.`);
   } catch (err) {
     console.error(`[FoodReminder] ${day} reminder failed:`, err.message);
@@ -29,17 +43,19 @@ async function fireReminder(day) {
 }
 
 /**
- * Schedule 3 weekly reminders at 5:00 PM IST (11:30 AM UTC):
- *   Monday    → cron  "30 11 * * 1"
- *   Wednesday → cron  "30 11 * * 3"
- *   Saturday  → cron  "30 11 * * 6"
+ * Weekly food reminder schedule (all times IST → UTC):
+ *   Monday    5:00 PM IST  → "30 11 * * 1"
+ *   Wednesday 5:00 PM IST  → "30 11 * * 3"
+ *   Saturday  4:00 PM IST  → "30 10 * * 6"  ← next-week status check
+ *   Saturday  5:00 PM IST  → "30 11 * * 6"  ← standard reminder
  */
 function startFoodReminderCron() {
-  cron.schedule("30 11 * * 1", () => fireReminder("Monday"),    { timezone: "UTC" });
-  cron.schedule("30 11 * * 3", () => fireReminder("Wednesday"), { timezone: "UTC" });
-  cron.schedule("30 11 * * 6", () => fireReminder("Saturday"),  { timezone: "UTC" });
+  cron.schedule("30 11 * * 1", () => fireReminder("Monday"),              { timezone: "UTC" });
+  cron.schedule("30 11 * * 3", () => fireReminder("Wednesday"),           { timezone: "UTC" });
+  cron.schedule("30 10 * * 6", () => fireReminder("Saturday-4PM", SAT_STATUS_PAYLOAD), { timezone: "UTC" });
+  cron.schedule("30 11 * * 6", () => fireReminder("Saturday-5PM"),        { timezone: "UTC" });
 
-  console.log("✅ Food reminders scheduled — Mon / Wed / Sat at 5:00 PM IST");
+  console.log("✅ Food reminders scheduled — Mon / Wed at 5 PM IST | Sat at 4 PM & 5 PM IST");
 }
 
 module.exports = { startFoodReminderCron };

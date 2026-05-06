@@ -115,11 +115,26 @@ model Request {
   forwarded      Boolean   @default(false)
   forwardedBy    String?   @map("forwarded_by")
   forwardedAt    DateTime? @map("forwarded_at")
-  assignedStatus String    @default("Open") @map("assigned_status")
-  isClosed       Boolean   @default(false) @map("is_closed")
-  resolvedDate   DateTime? @map("resolved_date")
-  resolvedBy     String?   @default("-") @map("resolved_by")
-  createdAt      DateTime  @default(now()) @map("created_at")
+  assignedStatus      String    @default("Open") @map("assigned_status")
+  isClosed            Boolean   @default(false) @map("is_closed")
+  resolvedDate        DateTime? @map("resolved_date")
+  resolvedBy          String?   @default("-") @map("resolved_by")
+  createdAt           DateTime  @default(now()) @map("created_at")
+
+  // Due date & priority
+  dueDate             DateTime? @map("due_date")
+
+  // Assigned person (from multi-dept selection)
+  assignedPersonEmpId String?   @map("assigned_person_emp_id")
+  assignedPersonName  String?   @map("assigned_person_name")
+
+  // Checking deadline (set when someone clicks Checking)
+  checkingDeadline    DateTime? @map("checking_deadline")
+  checkingReason      String?   @map("checking_reason")
+
+  // Requestor acknowledgement (after ticket is closed)
+  acknowledgement     String?   @map("acknowledgement")
+  acknowledgedAt      DateTime? @map("acknowledged_at")
 
   owner        User          @relation("RequestOwner", fields: [empId], references: [empId])
   chatMessages ChatMessage[]

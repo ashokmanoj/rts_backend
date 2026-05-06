@@ -15,6 +15,9 @@ router.get("/", ctrl.getAll);
 // GET unique filter options
 router.get("/filters", ctrl.getFilterOptions);
 
+// GET employees by dept(s) — used when creating a request
+router.get("/users-by-dept", ctrl.getUsersByDept);
+
 // ── Management Portal: HOD-pending requests & HOD-level approval ──────────
 router.get("/hod-pending", authorize("Management"), ctrl.getHodPending);
 router.patch("/:id/hod-approval", authorize("Management"), authorizeRequestAccess, ctrl.hodApproval);
@@ -28,6 +31,9 @@ router.patch("/:id/approval", authorizeRequestAccess, ctrl.approval);
 // Seen / Unread
 router.patch("/:id/seen", authorizeRequestAccess, ctrl.markSeen);
 router.patch("/:id/unread", authorizeRequestAccess, ctrl.markUnread);
+
+// Requestor acknowledgement after close
+router.patch("/:id/acknowledge", authorizeRequestAccess, ctrl.acknowledge);
 
 // Close request (optional file)
 router.patch("/:id/close", upload.single("file"), authorizeRequestAccess, ctrl.close);

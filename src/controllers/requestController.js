@@ -102,4 +102,30 @@ async function hodApproval(req, res, next) {
   }
 }
 
-module.exports = { getAll, getFilterOptions, create, approval, markSeen, markUnread, close, getHodPending, hodApproval };
+async function acknowledge(req, res, next) {
+  try {
+    const reqId = Number(req.params.id);
+    if (!req.body.status) return res.status(400).json({ error: "status is required." });
+    const result = await requestService.acknowledge(reqId, req.user, req.body);
+    res.json(result);
+  } catch (err) {
+    if (err.message.includes("not found"))   return res.status(404).json({ error: err.message });
+    if (err.message.includes("not closed") || err.message.includes("Only the requestor"))
+      return res.status(403).json({ error: err.message });
+    next(err);
+  }
+}
+
+async function getUsersByDept(req, res, next) {
+  try {
+    const { depts } = req.query;
+    if (!depts) return res.json([]);
+    const deptList = depts.split(",").map(d => d.trim()).filter(Boolean);
+    const users = await requestService.getUsersByDept(deptList);
+    res.json(users);
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports = { getAll, getFilterOptions, create, approval, markSeen, markUnread, close, getHodPending, hodApproval, acknowledge, getUsersByDept };

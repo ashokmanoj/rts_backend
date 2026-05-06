@@ -101,26 +101,35 @@ async function authorizeRequestAccess(req, res, next) {
   try {
     const request = await prisma.request.findUnique({
       where: { id: requestId },
-      select: { empId: true, dept: true, assignedDept: true }
+      select: { empId: true, dept: true, assignedDept: true, assignedPersonEmpId: true }
     });
 
     if (!request) return res.status(404).json({ error: "Request not found." });
 
     const { role, empId, dept: userDept } = req.user;
-    
+
     // Admin and Management see everything
     if (["Admin", "Management"].includes(role)) return next();
 
-    // Owner can see it
+    // Owner can always see their own request
     if (request.empId === empId) return next();
 
-    // If user is RM/HOD/DeptHOD of the owner's dept or the assigned dept
+    // RM / HOD / DeptHOD of the owner's dept or the assigned dept see everything
     if (["RM", "HOD", "DeptHOD"].includes(role)) {
       if (request.dept === userDept || request.assignedDept === userDept) return next();
     }
 
-    // Team members of the assigned department can see it (if not same dept as owner, they see it as "received")
-    if (request.assignedDept === userDept) return next();
+    // Regular staff in the assigned department
+    if (request.assignedDept === userDept) {
+      // If specific persons are named, only they can access it
+      if (request.assignedPersonEmpId) {
+        const ids = request.assignedPersonEmpId.split(",").map(s => s.trim());
+        if (ids.includes(empId)) return next();
+      } else {
+        // No specific person — whole dept can access
+        return next();
+      }
+    }
 
     return res.status(403).json({ error: "Access denied to this request." });
   } catch (error) {

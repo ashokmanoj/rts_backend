@@ -42,7 +42,14 @@ class RequestService {
     } else if (["RM", "HOD", "DeptHOD"].includes(role)) {
       roleFilter = { OR: [{ empId }, { dept: userDept }, { assignedDept: userDept }] };
     } else {
-      roleFilter = { OR: [{ empId }, { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }] }] };
+      // Regular staff: own requests + dept-wide requests with no specific assignee + specifically named
+      roleFilter = {
+        OR: [
+          { empId },
+          { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }, { OR: [{ assignedPersonEmpId: null }, { assignedPersonEmpId: "" }] }] },
+          { assignedPersonEmpId: { contains: empId } },
+        ],
+      };
     }
 
     const extraFilters = [];
@@ -100,7 +107,13 @@ class RequestService {
     } else if (["RM", "HOD", "DeptHOD"].includes(role)) {
       roleFilter = { OR: [{ empId }, { dept: userDept }, { assignedDept: userDept }] };
     } else {
-      roleFilter = { OR: [{ empId }, { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }] }] };
+      roleFilter = {
+        OR: [
+          { empId },
+          { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }, { OR: [{ assignedPersonEmpId: null }, { assignedPersonEmpId: "" }] }] },
+          { assignedPersonEmpId: { contains: empId } },
+        ],
+      };
     }
 
     const [rawNames, rawDepts, rawAssignedDepts] = await Promise.all([
@@ -118,19 +131,22 @@ class RequestService {
   }
 
   async create(user, data, uploadedFile, req) {
-    const { purpose, description, assignedDept } = data;
+    const { purpose, description, assignedDept, dueDate, assignedPersonEmpId, assignedPersonName } = data;
 
     const request = await prisma.request.create({
       data: {
-        empId:         user.empId,
+        empId:               user.empId,
         purpose,
-        description:   description || "",
-        fileUrl:       uploadedFile ? this.buildFileUrl(req, uploadedFile.filename) : null,
-        fileName:      uploadedFile ? uploadedFile.originalname : null,
-        dept:          user.dept,
-        assignedDept:  assignedDept || user.dept,
-        requestorRole: user.role,
-        readReceipts:  { create: { empId: user.empId } },
+        description:         description || "",
+        fileUrl:             uploadedFile ? this.buildFileUrl(req, uploadedFile.filename) : null,
+        fileName:            uploadedFile ? uploadedFile.originalname : null,
+        dept:                user.dept,
+        assignedDept:        assignedDept || user.dept,
+        requestorRole:       user.role,
+        dueDate:             dueDate ? new Date(dueDate) : null,
+        assignedPersonEmpId: assignedPersonEmpId || null,
+        assignedPersonName:  assignedPersonName  || null,
+        readReceipts:        { create: { empId: user.empId } },
       },
       include: WITH_OWNER,
     });
@@ -147,7 +163,11 @@ class RequestService {
     if (user.role === "Admin") throw new Error("Admin has read-only access.");
 
     let updateData = {};
-    if (decision === "Checking") updateData.assignedStatus = "Checking";
+    if (decision === "Checking") {
+      updateData.assignedStatus = "Checking";
+      if (body.checkingDeadline) updateData.checkingDeadline = new Date(body.checkingDeadline);
+      if (body.checkingReason)   updateData.checkingReason   = body.checkingReason;
+    }
 
     if (decision === "Forwarded") {
       if (!newDept) throw new Error("newDept is required when forwarding.");
@@ -159,7 +179,10 @@ class RequestService {
       updateData[dateField] = now;
     } else {
       const isTeamMember = existing.assignedDept === user.dept;
-      if (!(isTeamMember && decision === "Checking")) throw new Error("Unauthorized approval.");
+      const isAssigned = existing.assignedPersonEmpId
+        ? existing.assignedPersonEmpId.split(",").map(s => s.trim()).includes(user.empId)
+        : false;
+      if (!((isTeamMember || isAssigned) && decision === "Checking")) throw new Error("Unauthorized approval.");
     }
 
     await prisma.requestRead.deleteMany({ where: { requestId: reqId, empId: { not: user.empId } } });
@@ -271,6 +294,45 @@ class RequestService {
     });
 
     return formatRequest(updated, user.empId);
+  }
+
+  async acknowledge(reqId, user, body) {
+    const { status } = body;
+    if (!["Received", "Not Received"].includes(status))
+      throw new Error("status must be 'Received' or 'Not Received'.");
+
+    const existing = await prisma.request.findUnique({ where: { id: reqId } });
+    if (!existing) throw new Error("Request not found.");
+    if (!existing.isClosed) throw new Error("Request is not closed yet.");
+    if (existing.empId !== user.empId) throw new Error("Only the requestor can acknowledge.");
+
+    const updated = await prisma.request.update({
+      where: { id: reqId },
+      data:  { acknowledgement: status, acknowledgedAt: new Date() },
+      include: WITH_OWNER,
+    });
+
+    await prisma.chatMessage.create({
+      data: {
+        requestId: reqId,
+        authorId:  user.empId,
+        author:    user.name,
+        role:      user.role,
+        type:      "system",
+        text:      `✅ Requestor acknowledged: ${status}`,
+      },
+    });
+
+    return formatRequest(updated, user.empId);
+  }
+
+  async getUsersByDept(depts) {
+    const deptList = Array.isArray(depts) ? depts : [depts];
+    return prisma.user.findMany({
+      where:   { dept: { in: deptList }, isActive: true },
+      select:  { empId: true, name: true, dept: true, designation: true, role: true },
+      orderBy: { name: "asc" },
+    });
   }
 
   async markSeen(requestId, empId) {

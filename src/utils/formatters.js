@@ -1,10 +1,24 @@
 /**
  * src/utils/formatters.js
  * Converts raw Prisma rows into the JSON shape the frontend/mobile app uses.
- * Updated: Management role support + mgmtStatus field.
  */
 
 "use strict";
+
+const daysDiff = (date) => {
+  if (!date) return null;
+  return Math.ceil((new Date(date) - new Date()) / (1000 * 60 * 60 * 24));
+};
+
+const computePriority = (dueDate) => {
+  if (!dueDate) return null;
+  const days = daysDiff(dueDate);
+  if (days < 0)  return "Overdue";
+  if (days <= 7)  return "High";
+  if (days <= 15) return "Medium";
+  if (days <= 30) return "Low";
+  return null;
+};
 
 function formatRequest(row, viewerEmpId) {
   const pad = (d) => (d ? new Date(d).toLocaleString("en-IN") : null);
@@ -22,10 +36,9 @@ function formatRequest(row, viewerEmpId) {
     fileUrl:        row.fileUrl            ?? null,
     fileName:       row.fileName           ?? null,
 
-    // Role the requestor was acting as when they created the request
     requestorRole:  row.requestorRole  ?? null,
 
-    // Approval statuses — RM / HOD / DeptHOD
+    // Approval statuses
     rmStatus:       row.rmStatus,
     rmDate:         pad(row.rmDate),
     hodStatus:      row.hodStatus,
@@ -39,6 +52,10 @@ function formatRequest(row, viewerEmpId) {
     forwardedBy:    row.forwardedBy        ?? null,
     forwardedAt:    pad(row.forwardedAt),
 
+    // Assigned person
+    assignedPersonEmpId: row.assignedPersonEmpId ?? null,
+    assignedPersonName:  row.assignedPersonName  ?? null,
+
     // Closure
     status:         row.resolvedDate       ? "Closed" : "Open",
     assignedStatus: row.assignedStatus,
@@ -46,7 +63,6 @@ function formatRequest(row, viewerEmpId) {
     resolvedDate:   row.resolvedDate       ?? null,
     resolvedBy:     row.resolvedBy,
 
-    // New CloseTicket data
     closeData:      row.closeTicket ? {
       description: row.closeTicket.description,
       fileUrl:     row.closeTicket.fileUrl,
@@ -54,13 +70,26 @@ function formatRequest(row, viewerEmpId) {
       closedDate:  pad(row.closeTicket.closedDate),
     } : null,
 
-    // Read tracking (per user)
+    // Due date & priority
+    dueDate:        row.dueDate ? new Date(row.dueDate).toLocaleDateString("en-IN") : null,
+    dueDateRaw:     row.dueDate ?? null,
+    priority:       computePriority(row.dueDate),
+    daysUntilDue:   daysDiff(row.dueDate),
+
+    // Checking deadline
+    checkingDeadline:   row.checkingDeadline ? new Date(row.checkingDeadline).toLocaleDateString("en-IN") : null,
+    checkingReason:     row.checkingReason   ?? null,
+    checkingDaysLeft:   daysDiff(row.checkingDeadline),
+
+    // Requestor acknowledgement
+    acknowledgement:  row.acknowledgement  ?? null,
+    acknowledgedAt:   pad(row.acknowledgedAt),
+
+    // Read tracking
     seen: row.readReceipts ? row.readReceipts.some(r => r.empId === viewerEmpId) : false,
 
-    // Chat messages (if included in the query)
     chatMessages:   row.chatMessages ? row.chatMessages.map(formatMessage) : [],
 
-    // isOwnRequest: used to hide approval buttons when approver views own submission
     isOwnRequest:   viewerEmpId ? row.empId === viewerEmpId : undefined,
   };
 }
