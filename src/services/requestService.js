@@ -131,7 +131,7 @@ class RequestService {
   }
 
   async create(user, data, uploadedFile, req) {
-    const { purpose, description, assignedDept, dueDate, assignedPersonEmpId, assignedPersonName } = data;
+    const { purpose, description, assignedDept, assignedDepts, dueDate, assignedPersonEmpId, assignedPersonName } = data;
 
     const request = await prisma.request.create({
       data: {
@@ -142,6 +142,7 @@ class RequestService {
         fileName:            uploadedFile ? uploadedFile.originalname : null,
         dept:                user.dept,
         assignedDept:        assignedDept || user.dept,
+        assignedDepts:       assignedDepts || null,
         requestorRole:       user.role,
         dueDate:             dueDate ? new Date(dueDate) : null,
         assignedPersonEmpId: assignedPersonEmpId || null,
@@ -165,6 +166,7 @@ class RequestService {
     let updateData = {};
     if (decision === "Checking") {
       updateData.assignedStatus = "Checking";
+      updateData.checkingBy     = `${user.name} (${user.role})`;
       if (body.checkingDeadline) updateData.checkingDeadline = new Date(body.checkingDeadline);
       if (body.checkingReason)   updateData.checkingReason   = body.checkingReason;
     }
@@ -212,13 +214,12 @@ class RequestService {
     const { note } = body;
     const existing = await prisma.request.findUnique({ where: { id: reqId } });
     if (!existing) throw new Error("Request not found.");
-    if (existing.isClosed) throw new Error("Ticket already closed.");
+    if (existing.isClosed || existing.assignedStatus === "Pending Acknowledgement") throw new Error("Ticket already closed.");
 
     const canClose = ["DeptHOD", "Management"].includes(user.role) || (existing.assignedDept === user.dept && existing.dept !== user.dept);
     if (!canClose) throw new Error("Not authorized to close.");
 
     const now = new Date();
-    const dateStr = now.toLocaleDateString("en-IN");
     const fUrl = uploadedFile ? this.buildFileUrl(req, uploadedFile.filename) : null;
     const fName = uploadedFile ? uploadedFile.originalname : null;
     const isImg = uploadedFile ? uploadedFile.mimetype.startsWith("image/") : false;
@@ -229,11 +230,13 @@ class RequestService {
 
     const updated = await prisma.request.update({
       where: { id: reqId },
-      data: { assignedStatus: `${dateStr} (Closed)`, isClosed: true, resolvedDate: now, resolvedBy: user.name },
+      data: { assignedStatus: "Pending Acknowledgement", isClosed: false, resolvedDate: now, resolvedBy: user.name },
       include: WITH_OWNER,
     });
 
-    const closureText = note ? `🔒 Ticket closed by ${user.name} (${user.dept})\n\nResolution note: ${note} ` : `🔒 Ticket closed by ${user.name} (${user.dept})`;
+    const closureText = note
+      ? `🔒 Resolution submitted by ${user.name} (${user.dept}) — awaiting requestor acknowledgement.\n\nResolution note: ${note}`
+      : `🔒 Resolution submitted by ${user.name} (${user.dept}) — awaiting requestor acknowledgement.`;
     await prisma.chatMessage.create({ data: { requestId: reqId, authorId: user.empId, author: user.name, role: user.role, type: "system", text: closureText, fileUrl: fUrl, fileName: fName, isImage: isImg } });
 
     return formatRequest(updated, user.empId);
@@ -303,24 +306,33 @@ class RequestService {
 
     const existing = await prisma.request.findUnique({ where: { id: reqId } });
     if (!existing) throw new Error("Request not found.");
-    if (!existing.isClosed) throw new Error("Request is not closed yet.");
+    if (existing.assignedStatus !== "Pending Acknowledgement")
+      throw new Error("No pending acknowledgement for this ticket.");
     if (existing.empId !== user.empId) throw new Error("Only the requestor can acknowledge.");
+
+    const now = new Date();
+    let updateData;
+    let chatText;
+
+    if (status === "Received") {
+      const dateStr = now.toLocaleDateString("en-IN");
+      updateData = { acknowledgement: "Received", acknowledgedAt: now, isClosed: true, assignedStatus: `${dateStr} (Closed)` };
+      chatText = "✅ Requestor confirmed receipt — ticket is now officially closed.";
+    } else {
+      // Not Received: reopen the ticket
+      updateData = { acknowledgement: null, acknowledgedAt: null, isClosed: false, assignedStatus: "Open", resolvedDate: null, resolvedBy: null };
+      chatText = "🔄 Requestor reported not received — ticket has been reopened.";
+      await prisma.closeTicket.deleteMany({ where: { requestId: reqId } });
+    }
 
     const updated = await prisma.request.update({
       where: { id: reqId },
-      data:  { acknowledgement: status, acknowledgedAt: new Date() },
+      data:  updateData,
       include: WITH_OWNER,
     });
 
     await prisma.chatMessage.create({
-      data: {
-        requestId: reqId,
-        authorId:  user.empId,
-        author:    user.name,
-        role:      user.role,
-        type:      "system",
-        text:      `✅ Requestor acknowledged: ${status}`,
-      },
+      data: { requestId: reqId, authorId: user.empId, author: user.name, role: user.role, type: "system", text: chatText },
     });
 
     return formatRequest(updated, user.empId);

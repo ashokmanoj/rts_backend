@@ -124,6 +124,9 @@ model Request {
   // Due date & priority
   dueDate             DateTime? @map("due_date")
 
+  // Assigned departments (comma-separated, from multi-dept selection)
+  assignedDepts       String?   @map("assigned_depts")
+
   // Assigned person (from multi-dept selection)
   assignedPersonEmpId String?   @map("assigned_person_emp_id")
   assignedPersonName  String?   @map("assigned_person_name")
@@ -131,6 +134,7 @@ model Request {
   // Checking deadline (set when someone clicks Checking)
   checkingDeadline    DateTime? @map("checking_deadline")
   checkingReason      String?   @map("checking_reason")
+  checkingBy          String?   @map("checking_by")
 
   // Requestor acknowledgement (after ticket is closed)
   acknowledgement     String?   @map("acknowledgement")

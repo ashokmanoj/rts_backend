@@ -52,9 +52,10 @@ function formatRequest(row, viewerEmpId) {
     forwardedBy:    row.forwardedBy        ?? null,
     forwardedAt:    pad(row.forwardedAt),
 
-    // Assigned person
-    assignedPersonEmpId: row.assignedPersonEmpId ?? null,
-    assignedPersonName:  row.assignedPersonName  ?? null,
+    // Assigned departments & person
+    assignedDepts:       row.assignedDepts        ?? null,
+    assignedPersonEmpId: row.assignedPersonEmpId  ?? null,
+    assignedPersonName:  row.assignedPersonName   ?? null,
 
     // Closure
     status:         row.resolvedDate       ? "Closed" : "Open",
@@ -79,6 +80,7 @@ function formatRequest(row, viewerEmpId) {
     // Checking deadline
     checkingDeadline:   row.checkingDeadline ? new Date(row.checkingDeadline).toLocaleDateString("en-IN") : null,
     checkingReason:     row.checkingReason   ?? null,
+    checkingBy:         row.checkingBy       ?? null,
     checkingDaysLeft:   daysDiff(row.checkingDeadline),
 
     // Requestor acknowledgement
