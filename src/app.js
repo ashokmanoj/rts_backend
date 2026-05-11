@@ -1,8 +1,5 @@
 /**
  * src/app.js
- * ─────────────────────────────────────────────────────────────────────────────
- * Express Application Configuration.
- * ─────────────────────────────────────────────────────────────────────────────
  */
 
 "use strict";
@@ -22,6 +19,7 @@ const fileRoutes   = require("./routes/files");
 const pushRoutes   = require("./routes/push");
 
 const app = express();
+app.set('trust proxy', true); // Accept X-Forwarded-* headers from IIS or another reverse proxy
 
 // ── Security & Logging ────────────────────────────────────────────────────────
 app.use(helmet({
@@ -29,11 +27,19 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'"], // unsafe-inline is often needed for some React/Vite patterns, but 'self' is primary
-      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-      fontSrc: ["'self'", "https://fonts.gstatic.com"],
-      imgSrc: ["'self'", "data:", "blob:", "https://stucle-dev.sgp1.cdn.digitaloceanspaces.com"],
-      connectSrc: ["'self'", "http://localhost:5001", "http://192.168.1.128:5001"] // Adjust connectSrc as needed
+      scriptSrc:  ["'self'", "'unsafe-inline'"],
+      styleSrc:   ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      fontSrc:    ["'self'", "https://fonts.gstatic.com"],
+      imgSrc:     ["'self'", "data:", "blob:", "https://stucle-dev.sgp1.cdn.digitaloceanspaces.com"],
+      connectSrc: [   // ← FIXED: added production URLs
+        "'self'",
+        "http://localhost:5001",
+        "http://192.168.1.128:5001",
+        "https://telerts.com",
+        "https://www.telerts.com",
+        "http://telerts.com",
+        "http://www.telerts.com",
+      ]
     }
   },
   hsts: {
@@ -43,19 +49,19 @@ app.use(helmet({
   }
 }));
 app.use(morgan("dev"));
-app.disable("x-powered-by"); // Hide Express header for security
+app.disable("x-powered-by");
 
 // ── Global Rate Limiting ──────────────────────────────────────────────────────
 const globalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 10000, // Increased to 10,000 to accommodate 200+ concurrent users behind an office NAT
+  windowMs: 15 * 60 * 1000,
+  max: 10000,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "Too many requests, please try again later." }
 });
 app.use("/api", globalLimiter);
 
-// ── CORS ─────────────────────────────────────────────────────────────────────
+// ── CORS ──────────────────────────────────────────────────────────────────────
 const isDev = process.env.NODE_ENV === "development";
 const allowedOrigins = [
   process.env.CLIENT_URL,
@@ -64,31 +70,29 @@ const allowedOrigins = [
   "http://192.168.1.128:5173",
   "http://59.97.21.84",
   "http://59.97.21.84:5173",
+  "http://telerts.com",        // ← added
+  "http://www.telerts.com",    // ← added
   "https://telerts.com",
   "https://www.telerts.com",
 ].filter(Boolean);
 
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow requests with no origin (like mobile apps or curl)
     if (!origin) return callback(null, true);
-    
     if (allowedOrigins.includes(origin) || isDev) {
       callback(null, true);
     } else {
-      // Return null for error and false for allowed to avoid 500 error
       callback(null, false);
     }
   },
   credentials: true,
-  methods:     ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  methods:      ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
 }));
 
 // ── Body parsers ──────────────────────────────────────────────────────────────
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.disable('x-powered-by');
 
 // ── API routes ────────────────────────────────────────────────────────────────
 app.use("/api/auth",     authRoutes);
@@ -97,6 +101,14 @@ app.use("/api/admin",    adminRoutes);
 app.use("/api/food",     foodRoutes);
 app.use("/api/files",    fileRoutes);
 app.use("/api/push",     pushRoutes);
+
+// ── Serve static files from React app in production ──────────────────────────
+if (process.env.NODE_ENV === 'production') {
+  app.use(express.static(path.join(__dirname, '../../rts_frontend/dist')));
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, '../../rts_frontend/dist/index.html'));
+  });
+}
 
 // ── Health check ──────────────────────────────────────────────────────────────
 app.get("/api/health", (_req, res) =>

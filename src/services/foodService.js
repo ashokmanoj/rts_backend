@@ -19,13 +19,12 @@ const {
 class FoodService {
 
   // ── Opt-in / subscribe ────────────────────────────────────────────────────
-  // Subscription always starts from next Monday so the current week's food
-  // order is not affected by a mid-week opt-in.
+  // Subscription always starts from NEXT Monday — current week is never affected.
   async subscribe(empId) {
     const { getNowIST } = require("../utils/workingDays");
     const now = getNowIST();
-    // Monday = start of week, subscription begins today; Tue–Sun = starts next Monday
-    const startDate = now.getDay() === 1 ? getMondayOfCurrentWeek(now) : getNextMonday(now);
+    // Always start from next Monday, regardless of which day the user opts in
+    const startDate = getNextMonday(now);
 
     const existing = await prisma.foodSubscription.findUnique({ where: { empId } });
     if (existing) {
