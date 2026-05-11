@@ -19,7 +19,7 @@ const fileRoutes   = require("./routes/files");
 const pushRoutes   = require("./routes/push");
 
 const app = express();
-app.set('trust proxy', true); // Accept X-Forwarded-* headers from IIS or another reverse proxy
+app.set('trust proxy', 1); // Trust one hop (IIS reverse proxy) — prevents X-Forwarded-For spoofing
 
 // ── Security & Logging ────────────────────────────────────────────────────────
 app.use(helmet({
