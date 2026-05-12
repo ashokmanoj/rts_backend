@@ -22,8 +22,8 @@ router.get("/users-by-dept", ctrl.getUsersByDept);
 router.get("/hod-pending", authorize("Management"), ctrl.getHodPending);
 router.patch("/:id/hod-approval", authorize("Management"), authorizeRequestAccess, ctrl.hodApproval);
 
-// CREATE request (with optional file)
-router.post("/", upload.single("file"), ctrl.create);
+// CREATE request (with optional files — up to 5)
+router.post("/", upload.array("files", 5), ctrl.create);
 
 // APPROVAL flow
 router.patch("/:id/approval", authorizeRequestAccess, ctrl.approval);

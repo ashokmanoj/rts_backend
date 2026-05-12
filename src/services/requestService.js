@@ -130,23 +130,28 @@ class RequestService {
     };
   }
 
-  async create(user, data, uploadedFile, req) {
+  async create(user, data, uploadedFiles, req) {
     const { purpose, description, assignedDept, assignedDepts, dueDate, assignedPersonEmpId, assignedPersonName } = data;
+
+    const files = Array.isArray(uploadedFiles) ? uploadedFiles : (uploadedFiles ? [uploadedFiles] : []);
+    const first = files[0] ?? null;
 
     const request = await prisma.request.create({
       data: {
         empId:               user.empId,
         purpose,
         description:         description || "",
-        fileUrl:             uploadedFile ? this.buildFileUrl(req, uploadedFile.filename) : null,
-        fileName:            uploadedFile ? uploadedFile.originalname : null,
+        fileUrl:             first ? this.buildFileUrl(req, first.filename) : null,
+        fileName:            first ? first.originalname : null,
+        fileUrls:            files.length > 0 ? JSON.stringify(files.map(f => this.buildFileUrl(req, f.filename))) : null,
+        fileNames:           files.length > 0 ? JSON.stringify(files.map(f => f.originalname)) : null,
         dept:                user.dept,
-        assignedDept:        assignedDept || user.dept,
-        assignedDepts:       assignedDepts || null,
+        assignedDept:        (Array.isArray(assignedDept) ? assignedDept[0] : assignedDept) || user.dept,
+        assignedDepts:       (Array.isArray(assignedDepts) ? assignedDepts[0] : assignedDepts) || null,
         requestorRole:       user.role,
         dueDate:             dueDate ? new Date(dueDate) : null,
         assignedPersonEmpId: assignedPersonEmpId || null,
-        assignedPersonName:  assignedPersonName  || null,
+        assignedPersonName:  Array.isArray(assignedPersonName) ? (assignedPersonName[0] || null) : (assignedPersonName || null),
         readReceipts:        { create: { empId: user.empId } },
       },
       include: WITH_OWNER,

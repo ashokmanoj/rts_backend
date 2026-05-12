@@ -30,7 +30,7 @@ async function getFilterOptions(req, res, next) {
 async function create(req, res, next) {
   try {
     if (!req.body.purpose) return res.status(400).json({ error: "purpose is required." });
-    const result = await requestService.create(req.user, req.body, req.file, req);
+    const result = await requestService.create(req.user, req.body, req.files || [], req);
     res.status(201).json(result);
   } catch (err) {
     next(err);

@@ -103,6 +103,8 @@ model Request {
   description    String?
   fileUrl        String?   @map("file_url")
   fileName       String?   @map("file_name")
+  fileUrls       String?   @map("file_urls")
+  fileNames      String?   @map("file_names")
   dept           String
   assignedDept   String    @map("assigned_dept")
   requestorRole  String?   @map("requestor_role")

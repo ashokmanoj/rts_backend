@@ -35,6 +35,8 @@ function formatRequest(row, viewerEmpId) {
     description:    row.description        ?? "",
     fileUrl:        row.fileUrl            ?? null,
     fileName:       row.fileName           ?? null,
+    fileUrls:  (() => { if (row.fileUrls)  { try { return JSON.parse(row.fileUrls);  } catch { return null; } } return row.fileUrl  ? [row.fileUrl]  : null; })(),
+    fileNames: (() => { if (row.fileNames) { try { return JSON.parse(row.fileNames); } catch { return null; } } return row.fileName ? [row.fileName] : null; })(),
 
     requestorRole:  row.requestorRole  ?? null,
 
