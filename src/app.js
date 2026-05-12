@@ -57,7 +57,11 @@ const globalLimiter = rateLimit({
   max: 10000,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: "Too many requests, please try again later." }
+  message: { error: "Too many requests, please try again later." },
+  keyGenerator: (req) => {
+    const raw = req.ip || req.socket?.remoteAddress || "unknown";
+    return raw.replace(/^::ffff:/, "").replace(/:\d+$/, "");
+  },
 });
 app.use("/api", globalLimiter);
 
