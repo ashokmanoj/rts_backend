@@ -12,8 +12,8 @@ const escapeHTML = (str) => {
 
 const instantiateFromTemplate = (template, vars) =>
     Object.keys(vars).reduce((a, n) => {
-      // Don't escape the 'link' variable as it's intended to be a raw URL in an href
-      const value = n === 'link' ? vars[n] : escapeHTML(vars[n]);
+      // Don't escape URL or base64 image data — escaping would corrupt them
+      const value = (n === 'link' || n === 'logoSrc') ? vars[n] : escapeHTML(vars[n]);
       return a.split(`\${${n}}`).join(value);
     }, template);
 

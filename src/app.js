@@ -9,7 +9,7 @@ const cors         = require("cors");
 const helmet       = require("helmet");
 const morgan       = require("morgan");
 const path         = require("path");
-const rateLimit    = require("express-rate-limit");
+const { default: rateLimit, ipKeyGenerator } = require("express-rate-limit");
 const errorHandler = require("./middleware/errorHandler");
 const authRoutes   = require("./routes/auth");
 const requestRoutes= require("./routes/requests");
@@ -60,7 +60,8 @@ const globalLimiter = rateLimit({
   message: { error: "Too many requests, please try again later." },
   keyGenerator: (req) => {
     const raw = req.ip || req.socket?.remoteAddress || "unknown";
-    return raw.replace(/^::ffff:/, "").replace(/:\d+$/, "");
+    const ip  = raw.replace(/^::ffff:/, "").replace(/:\d+$/, "");
+    return ipKeyGenerator({ ip });
   },
 });
 app.use("/api", globalLimiter);

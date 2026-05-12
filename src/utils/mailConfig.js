@@ -1,16 +1,18 @@
+const smtpPort = parseInt(process.env.SMTP_PORT) || 465;
+const isSecure = smtpPort === 465;
+
 let config = {
   mailer: {
     host: process.env.MAILER_HOST || process.env.SMTP_HOST,
-    port: parseInt(process.env.SMTP_PORT) || 465,
+    port: smtpPort,
     name: "noreply",
-    secure: (parseInt(process.env.SMTP_PORT) || 465) === 465,
-    logger: true,
+    secure: isSecure,
+    requireTLS: !isSecure,  // force STARTTLS upgrade for port 587
     auth: {
       user: process.env.MAILER_USER || process.env.SMTP_USER,
       pass: process.env.MAILER_PASS || process.env.SMTP_PASS
     },
     tls: {
-      // Ensure we validate certificates for security
       rejectUnauthorized: true,
     }
   },

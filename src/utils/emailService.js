@@ -7,19 +7,26 @@ const config = require('./mailConfig');
 
 const sendPasswordResetEmail = async (email, userName, token) => {
   const fullName = userName || 'User';
-  const name = 'RTS'; // System name
+  const name = 'RTS';
 
+  const logoPath = path.join(__dirname, '../../assets/images/rtsLogo.png');
+  const logoSrc  = 'cid:rtslogo';
   let link = `${process.env.FRONTEND_URL}/reset-password/${token}`;
   let htmlFile = path.join(__dirname, 'ResetPassword.html');
   let contents = readFile(htmlFile);
-  let html = instantiateFromTemplate(contents, {fullName, link, expiry: 60, name});
-  
+  let html = instantiateFromTemplate(contents, { fullName, link, expiry: 60, name, logoSrc });
+
   let transporter = nodemailer.createTransport(config.mailer);
   let mailOptions = {
     from: config.mailUser.email,
     to: email,
     subject: name + ' -- Password Recovery',
-    html
+    html,
+    attachments: [{
+      filename: 'rtsLogo.png',
+      path: logoPath,
+      cid: 'rtslogo',
+    }],
   };
   
   return new Promise((resolve, reject) => {

@@ -1,7 +1,13 @@
 const router      = require("express").Router({ caseSensitive: true });
-const rateLimit   = require("express-rate-limit");
+const { default: rateLimit, ipKeyGenerator } = require("express-rate-limit");
 const { login, me, selectRole, switchRole, logout, heartbeat, forgotPassword, resetPassword } = require("../controllers/authController");
 const { authenticate, authenticateTemp, authenticateLogout } = require("../middleware/auth");
+
+const normalizeIp = (req) => {
+  const raw = req.ip || req.socket?.remoteAddress || "unknown";
+  const ip  = raw.replace(/^::ffff:/, "").replace(/:\d+$/, "");
+  return ipKeyGenerator({ ip });
+};
 
 // 5 attempts per 15 min per IP — applied only to the password-reset routes
 const resetLimiter = rateLimit({
@@ -10,6 +16,7 @@ const resetLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders:   false,
   message:         { error: "Too many requests. Please try again in 15 minutes." },
+  keyGenerator:    normalizeIp,
 });
 
 // 10 attempts per 15 min per IP — for login
@@ -19,6 +26,7 @@ const loginLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders:   false,
   message:         { error: "Too many login attempts. Please try again in 15 minutes." },
+  keyGenerator:    normalizeIp,
 });
 
 // POST /api/auth/login
