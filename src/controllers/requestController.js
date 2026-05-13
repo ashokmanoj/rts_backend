@@ -27,6 +27,17 @@ async function getFilterOptions(req, res, next) {
   }
 }
 
+async function getById(req, res, next) {
+  try {
+    const reqId = Number(req.params.id);
+    const result = await requestService.getById(reqId, req.user);
+    if (!result) return res.status(404).json({ error: "Request not found." });
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
 async function create(req, res, next) {
   try {
     if (!req.body.purpose) return res.status(400).json({ error: "purpose is required." });
@@ -128,4 +139,4 @@ async function getUsersByDept(req, res, next) {
   }
 }
 
-module.exports = { getAll, getFilterOptions, create, approval, markSeen, markUnread, close, getHodPending, hodApproval, acknowledge, getUsersByDept };
+module.exports = { getAll, getById, getFilterOptions, create, approval, markSeen, markUnread, close, getHodPending, hodApproval, acknowledge, getUsersByDept };

@@ -7,10 +7,9 @@ const config = require('./mailConfig');
 
 const sendPasswordResetEmail = async (email, userName, token) => {
   const fullName = userName || 'User';
-  const name = 'RTS';
+  const name = 'TELE-RTS';
 
-  const logoPath = path.join(__dirname, '../../assets/images/rtsLogo.png');
-  const logoSrc  = 'cid:rtslogo';
+  const logoSrc = `${process.env.FRONTEND_URL}/rtsLogo.png`;
   let link = `${process.env.FRONTEND_URL}/reset-password/${token}`;
   let htmlFile = path.join(__dirname, 'ResetPassword.html');
   let contents = readFile(htmlFile);
@@ -22,11 +21,6 @@ const sendPasswordResetEmail = async (email, userName, token) => {
     to: email,
     subject: name + ' -- Password Recovery',
     html,
-    attachments: [{
-      filename: 'rtsLogo.png',
-      path: logoPath,
-      cid: 'rtslogo',
-    }],
   };
   
   return new Promise((resolve, reject) => {

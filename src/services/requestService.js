@@ -130,6 +130,12 @@ class RequestService {
     };
   }
 
+  async getById(reqId, user) {
+    const row = await prisma.request.findUnique({ where: { id: reqId }, include: WITH_OWNER });
+    if (!row) return null;
+    return formatRequest(row, user.empId);
+  }
+
   async create(user, data, uploadedFiles, req) {
     const { purpose, description, assignedDept, assignedDepts, dueDate, assignedPersonEmpId, assignedPersonName } = data;
 
