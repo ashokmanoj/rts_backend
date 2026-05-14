@@ -25,7 +25,7 @@ class RequestService {
   async getAll(user, query) {
     const { role, empId, dept: userDept } = user;
     const { page, limit, skip, take } = parsePagination(query);
-    const { status, search, name, dept, assignedDept, type, startDate, endDate, assignedStatus } = query;
+    const { status, search, name, dept, assignedDept, type, startDate, endDate, assignedStatus, priority } = query;
 
     let closureFilter = {};
     if (status === "open") closureFilter = { resolvedDate: null };
@@ -56,6 +56,26 @@ class RequestService {
     if (name) extraFilters.push({ owner: { name: { contains: name, mode: "insensitive" } } });
     if (dept) extraFilters.push({ dept });
     if (assignedDept) extraFilters.push({ assignedDept });
+
+    if (priority) {
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const endOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
+      if (priority === "Overdue") {
+        extraFilters.push({ dueDate: { not: null, lt: today } });
+      } else if (priority === "High") {
+        const d7 = new Date(today); d7.setDate(d7.getDate() + 7);
+        extraFilters.push({ dueDate: { gte: today, lte: endOfDay(d7) } });
+      } else if (priority === "Medium") {
+        const d8  = new Date(today); d8.setDate(d8.getDate() + 8);
+        const d15 = new Date(today); d15.setDate(d15.getDate() + 15);
+        extraFilters.push({ dueDate: { gte: d8, lte: endOfDay(d15) } });
+      } else if (priority === "Low") {
+        const d16 = new Date(today); d16.setDate(d16.getDate() + 16);
+        const d30 = new Date(today); d30.setDate(d30.getDate() + 30);
+        extraFilters.push({ dueDate: { gte: d16, lte: endOfDay(d30) } });
+      }
+    }
     if (type === "sent") extraFilters.push({ empId });
     else if (type === "received") extraFilters.push({ assignedDept: userDept, empId: { not: empId } });
 
