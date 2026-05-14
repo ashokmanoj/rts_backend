@@ -89,6 +89,9 @@ function formatRequest(row, viewerEmpId) {
     acknowledgement:  row.acknowledgement  ?? null,
     acknowledgedAt:   pad(row.acknowledgedAt),
 
+    // GN-route: requestor's RM or HOD is GN-01 or GN-02 → goes to Management portal
+    isGnRoute: !!(["GN-01", "GN-02"].includes(row.owner?.rmEmpId) || ["GN-01", "GN-02"].includes(row.owner?.hodEmpId)),
+
     // Read tracking
     seen: row.readReceipts ? row.readReceipts.some(r => r.empId === viewerEmpId) : false,
 

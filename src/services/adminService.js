@@ -20,6 +20,18 @@ class AdminService {
 
     return users.map((user, index) => {
       const totalDurationMinutes = user.loginLogs.reduce((acc, log) => acc + (log.duration || 0), 0);
+
+      // Group login durations by calendar day (YYYY-MM-DD in IST)
+      const dailyMap = {};
+      user.loginLogs.forEach(log => {
+        if (!log.loginAt) return;
+        const day = new Date(log.loginAt).toLocaleDateString("en-CA"); // "YYYY-MM-DD"
+        dailyMap[day] = (dailyMap[day] || 0) + (log.duration || 0);
+      });
+      const dailyUsage = Object.entries(dailyMap)
+        .map(([date, minutes]) => ({ date, minutes, hours: parseFloat((minutes / 60).toFixed(2)) }))
+        .sort((a, b) => b.date.localeCompare(a.date));
+
       return {
         slNo: index + 1,
         id: user.id,
@@ -32,7 +44,9 @@ class AdminService {
         designation: user.designation,
         location: user.location,
         lastLogin: user.lastLogin,
+        totalUsageMinutes: totalDurationMinutes,
         totalUsageHours: (totalDurationMinutes / 60).toFixed(2),
+        dailyUsage,
         isActive: user.isActive,
         rmEmpId: user.rmEmpId,
         hodEmpId: user.hodEmpId,

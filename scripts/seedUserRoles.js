@@ -90,10 +90,10 @@ const USER_ROLES = [
   // ── Nithish V (AC-1030) ──────────────────────────────────────────────────
   // Animation: Requestor=No,  RM=Yes
   // Software:  Requestor=Yes, RM=Yes, DeptHOD=Yes
-  { empId: "AC-1030", role: "RM",        dept: "Animation" },
+  { empId: "AC-1030", role: "RM",        dept: "Game Development" },
   { empId: "AC-1030", role: "Requestor", dept: "Software"  },
   { empId: "AC-1030", role: "RM",        dept: "Software"  },
-  { empId: "AC-1030", role: "HOD",       dept: "Animation"  },
+  { empId: "AC-1030", role: "HOD",       dept: "Game Development"  },
   { empId: "AC-1030", role: "HOD",       dept: "Software"  },
   
 

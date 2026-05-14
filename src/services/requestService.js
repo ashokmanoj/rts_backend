@@ -39,8 +39,24 @@ class RequestService {
     let roleFilter = {};
     if (role === "Management" || role === "Admin") {
       roleFilter = {};
-    } else if (["RM", "HOD", "DeptHOD"].includes(role)) {
+    } else if (role === "DeptHOD") {
       roleFilter = { OR: [{ empId }, { dept: userDept }, { assignedDept: userDept }] };
+    } else if (role === "RM") {
+      roleFilter = {
+        OR: [
+          { empId },
+          { owner: { rmEmpId: empId } },
+          { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }] },
+        ],
+      };
+    } else if (role === "HOD") {
+      roleFilter = {
+        OR: [
+          { empId },
+          { owner: { hodEmpId: empId } },
+          { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }] },
+        ],
+      };
     } else {
       // Regular staff: own requests + dept-wide requests with no specific assignee + specifically named
       roleFilter = {
@@ -124,8 +140,24 @@ class RequestService {
     let roleFilter = {};
     if (role === "Management" || role === "Admin") {
       roleFilter = {};
-    } else if (["RM", "HOD", "DeptHOD"].includes(role)) {
+    } else if (role === "DeptHOD") {
       roleFilter = { OR: [{ empId }, { dept: userDept }, { assignedDept: userDept }] };
+    } else if (role === "RM") {
+      roleFilter = {
+        OR: [
+          { empId },
+          { owner: { rmEmpId: empId } },
+          { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }] },
+        ],
+      };
+    } else if (role === "HOD") {
+      roleFilter = {
+        OR: [
+          { empId },
+          { owner: { hodEmpId: empId } },
+          { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }] },
+        ],
+      };
     } else {
       roleFilter = {
         OR: [
@@ -276,10 +308,23 @@ class RequestService {
   async getHodPendingRequests(user) {
     const requests = await prisma.request.findMany({
       where: {
-        requestorRole: "HOD",
-        hodStatus:     { in: ["--", "Checking"] },
-        rmStatus:      { not: "Rejected" },
-        isClosed:      false,
+        OR: [
+          {
+            requestorRole: "HOD",
+            hodStatus:     { in: ["--", "Checking"] },
+            rmStatus:      { not: "Rejected" },
+            isClosed:      false,
+          },
+          {
+            isClosed: false,
+            owner: {
+              OR: [
+                { rmEmpId:  { in: ["GN-01", "GN-02"] } },
+                { hodEmpId: { in: ["GN-01", "GN-02"] } },
+              ],
+            },
+          },
+        ],
       },
       include: WITH_OWNER,
       orderBy: { createdAt: "desc" },
@@ -289,13 +334,20 @@ class RequestService {
 
   async hodApproval(reqId, user, body) {
     const { decision, comment } = body;
-    if (!["Approved", "Rejected"].includes(decision)) {
-      throw new Error("Decision must be Approved or Rejected.");
-    }
 
     const existing = await prisma.request.findUnique({ where: { id: reqId }, include: { owner: true } });
     if (!existing) throw new Error("Request not found.");
     if (existing.isClosed) throw new Error("Cannot update a closed ticket.");
+
+    const GN_MANAGERS = ["GN-01", "GN-02"];
+    const isGnRequest = GN_MANAGERS.includes(existing.owner?.rmEmpId) || GN_MANAGERS.includes(existing.owner?.hodEmpId);
+    const validDecisions = isGnRequest
+      ? ["Approved", "Checking", "Rejected", "Close"]
+      : ["Approved", "Rejected"];
+
+    if (!validDecisions.includes(decision)) {
+      throw new Error(`Decision must be one of: ${validDecisions.join(", ")}.`);
+    }
 
     const now = new Date();
 
@@ -306,9 +358,13 @@ class RequestService {
       create: { requestId: reqId, empId: user.empId },
     });
 
+    const updateData = decision === "Close"
+      ? { hodStatus: "Closed", hodDate: now, isClosed: true }
+      : { hodStatus: decision, hodDate: now };
+
     const updated = await prisma.request.update({
       where: { id: reqId },
-      data: { hodStatus: decision, hodDate: now },
+      data: updateData,
       include: WITH_OWNER,
     });
 
@@ -320,7 +376,7 @@ class RequestService {
         role:      user.role,
         type:      "approval",
         text:      comment || `${decision} the request.`,
-        status:    decision,
+        status:    decision === "Close" ? "Closed" : decision,
         purpose:   updated.purpose,
         changedDept:  null,
         originalDept: existing.assignedDept,
