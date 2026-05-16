@@ -191,6 +191,7 @@ model ChatMessage {
   isImage      Boolean     @default(false) @map("is_image")
   voiceUrl     String?     @map("voice_url")
   duration     String?
+  replyTo      String?     @map("reply_to")
   status       String?
   purpose      String?
   changedDept  String?     @map("changed_dept")

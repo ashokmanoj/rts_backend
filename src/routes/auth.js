@@ -9,7 +9,7 @@ const normalizeIp = (req) => {
   return ipKeyGenerator({ ip });
 };
 
-// 5 attempts per 15 min per IP — applied only to the password-reset routes
+// 5 attempts per 15 min per IP — applied only to the reset-password route
 const resetLimiter = rateLimit({
   windowMs:        15 * 60 * 1000,
   max:             5,
@@ -17,6 +17,23 @@ const resetLimiter = rateLimit({
   legacyHeaders:   false,
   message:         { error: "Too many requests. Please try again in 15 minutes." },
   keyGenerator:    normalizeIp,
+});
+
+// 3 attempts per hour per IP — stricter limit for forgot-password
+const forgotLimiter = rateLimit({
+  windowMs:        60 * 60 * 1000,
+  max:             3,
+  standardHeaders: true,
+  legacyHeaders:   false,
+  keyGenerator:    normalizeIp,
+  handler: (req, res) => {
+    const retryAfterSecs = parseInt(res.getHeader("Retry-After") || "3600", 10);
+    const minutes        = Math.ceil(retryAfterSecs / 60);
+    res.status(429).json({
+      error:       `You've made too many attempts. Please try again in ${minutes} minute${minutes !== 1 ? "s" : ""}.`,
+      retryAfter:  retryAfterSecs,
+    });
+  },
 });
 
 // 10 attempts per 15 min per IP — for login
@@ -47,8 +64,8 @@ router.post("/heartbeat", authenticate, heartbeat);
 // GET  /api/auth/me  (protected)
 router.get("/me", authenticate, me);
 
-// POST /api/auth/forgot-password  (public, rate-limited)
-router.post("/forgot-password", resetLimiter, forgotPassword);
+// POST /api/auth/forgot-password  (public, rate-limited — 3/hour)
+router.post("/forgot-password", forgotLimiter, forgotPassword);
 
 // POST /api/auth/reset-password/:token  (public, rate-limited)
 router.post("/reset-password/:token", resetLimiter, resetPassword);

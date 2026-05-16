@@ -88,7 +88,7 @@ class AdminService {
 
   async createUser(data) {
     const { empId, name, email, phone, role, dept, designation, location, password, rmEmpId, hodEmpId } = data;
-    const existing = await prisma.user.findFirst({ where: { OR: [{ empId }, { email: email.toLowerCase() }] } });
+    const existing = await prisma.user.findFirst({ where: { OR: [{ empId }, { email: { equals: email.trim(), mode: "insensitive" } }] } });
     if (existing) throw new Error("User with this Employee ID or Email already exists.");
 
     const passwordHash = await bcrypt.hash(password, 10);

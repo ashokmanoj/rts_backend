@@ -16,19 +16,19 @@ const storage = multer.diskStorage({
   },
 });
 
-const fileFilter = (_req, file, cb) => {
-  const allowedExtensions = /^\.(jpeg|jpg|png|pdf|docx|xlsx|mp3|wav|m4a)$/;
-  const allowedMimetypes = /^(image\/jpeg|image\/png|application\/pdf|application\/vnd\.openxmlformats-officedocument\.wordprocessingml\.document|application\/vnd\.openxmlformats-officedocument\.spreadsheetml\.sheet|audio\/mpeg|audio\/wav|audio\/x-m4a|audio\/mp4)$/;
-  
-  const ext = path.extname(file.originalname).toLowerCase();
-  const isExtAllowed = allowedExtensions.test(ext);
-  const isMimeAllowed = allowedMimetypes.test(file.mimetype);
+const ALLOWED_EXTENSIONS = new Set([
+  ".jpeg", ".jpg", ".png",
+  ".pdf", ".docx",
+  ".xlsx", ".csv",
+  ".mp3", ".wav", ".m4a",
+]);
 
-  if (isExtAllowed && isMimeAllowed) {
+const fileFilter = (_req, file, cb) => {
+  const ext = path.extname(file.originalname).toLowerCase();
+  if (ALLOWED_EXTENSIONS.has(ext)) {
     return cb(null, true);
-  } else {
-    cb(new Error("Error: Invalid file type. Only JPG, PNG, PDF, DOCX, XLSX, MP3, WAV, and M4A are allowed."));
   }
+  cb(new Error("Invalid file type. Allowed: JPG, PNG, PDF, DOCX, XLSX, CSV, MP3, WAV, M4A."));
 };
 
 const maxSize = (Number(process.env.MAX_FILE_SIZE_MB) || 10) * 1024 * 1024;

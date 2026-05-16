@@ -17,14 +17,18 @@ class ChatService {
   }
 
   async getMessages(requestId) {
-    return prisma.chatMessage.findMany({
+    const messages = await prisma.chatMessage.findMany({
       where: { requestId },
       orderBy: { createdAt: "asc" },
     });
+    return messages.map(m => ({
+      ...m,
+      replyTo: m.replyTo ? JSON.parse(m.replyTo) : null,
+    }));
   }
 
   async sendMessage(requestId, user, body, uploadedFile, req) {
-    const { text, type, duration } = body;
+    const { text, type, duration, replyTo } = body;
     const isImage = uploadedFile ? uploadedFile.mimetype.startsWith("image/") : false;
     const isVoice = type === "voice";
 
@@ -35,6 +39,7 @@ class ChatService {
       role: user.role,
       type: type || "message",
       text: text || "",
+      replyTo: replyTo || null,
     };
 
     if (uploadedFile) {
@@ -56,7 +61,7 @@ class ChatService {
       where: { requestId, empId: { not: user.empId } }
     });
 
-    return saved;
+    return { ...saved, replyTo: saved.replyTo ? JSON.parse(saved.replyTo) : null };
   }
 }
 
