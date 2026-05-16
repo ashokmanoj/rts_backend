@@ -10,6 +10,7 @@
 const prisma = require("../config/database");
 const { formatRequest } = require("../utils/formatters");
 const { parsePagination, buildPageResponse } = require("../utils/paginate");
+const { sendNewRequestNotification } = require("../utils/pushService");
 
 const WITH_OWNER = { owner: true, closeTicket: true, chatMessages: true, readReceipts: true };
 
@@ -214,6 +215,10 @@ class RequestService {
       },
       include: WITH_OWNER,
     });
+
+    // Fire push notifications to RM, HOD, DeptHOD (non-blocking)
+    sendNewRequestNotification(request).catch(() => {});
+
     return formatRequest(request, user.empId);
   }
 

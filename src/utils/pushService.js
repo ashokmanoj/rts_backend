@@ -50,4 +50,58 @@ async function sendPushToAllFoodSubscribers(payload) {
   );
 }
 
-module.exports = { sendPushToUser, sendPushToAllFoodSubscribers };
+const GN_MANAGERS = ["GN-01", "GN-02"];
+
+/**
+ * Fire push notifications to all users who should see a newly-created request.
+ * Runs fire-and-forget — caller should not await this.
+ */
+async function sendNewRequestNotification(request) {
+  const owner = request.owner;
+  if (!owner) return;
+
+  const purpose = (request.purpose || "New request").substring(0, 70);
+  const payload = {
+    title: "📋 New Request",
+    body:  `${owner.name} (${owner.dept}) — ${purpose}`,
+    icon:  "/rtsLogo.png",
+    badge: "/rtsLogo.png",
+    tag:   `request-${request.id}`,
+    renotify: true,
+    requireInteraction: false,
+    type:  "new_request",
+    url:   "/",
+  };
+
+  const recipients = new Set();
+
+  // Specific RM and HOD assigned to the requestor
+  if (owner.rmEmpId)  recipients.add(owner.rmEmpId);
+  if (owner.hodEmpId) recipients.add(owner.hodEmpId);
+
+  // DeptHOD of the assigned department (stored in base users table)
+  const deptHods = await prisma.user.findMany({
+    where:  { role: "DeptHOD", dept: request.assignedDept },
+    select: { empId: true },
+  });
+  deptHods.forEach(u => recipients.add(u.empId));
+
+  // GN-route: also notify Management users (stored in base users table)
+  const isGnRoute = GN_MANAGERS.includes(owner.rmEmpId) || GN_MANAGERS.includes(owner.hodEmpId);
+  if (isGnRoute) {
+    const mgmt = await prisma.user.findMany({
+      where:  { role: "Management" },
+      select: { empId: true },
+    });
+    mgmt.forEach(u => recipients.add(u.empId));
+  }
+
+  // Never notify the requestor themselves
+  recipients.delete(request.empId);
+
+  await Promise.allSettled(
+    [...recipients].map(empId => sendPushToUser(empId, payload))
+  );
+}
+
+module.exports = { sendPushToUser, sendPushToAllFoodSubscribers, sendNewRequestNotification };
