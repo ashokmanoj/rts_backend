@@ -18,8 +18,8 @@ const storage = multer.diskStorage({
 
 const ALLOWED_EXTENSIONS = new Set([
   ".jpeg", ".jpg", ".png",
-  ".pdf", ".docx",
-  ".xlsx", ".csv",
+  ".pdf", ".doc", ".docx",
+  ".xls", ".xlsx", ".csv",
   ".zip", ".rar",
   ".mp3", ".wav", ".m4a",
 ]);
@@ -29,7 +29,7 @@ const fileFilter = (_req, file, cb) => {
   if (ALLOWED_EXTENSIONS.has(ext)) {
     return cb(null, true);
   }
-  const err = new Error("Invalid file type. Allowed: JPG, PNG, PDF, DOCX, XLSX, CSV, ZIP, RAR, MP3, WAV, M4A.");
+  const err = new Error("Invalid file type. Allowed: JPG, PNG, PDF, DOC, DOCX, XLS, XLSX, CSV, ZIP, RAR, MP3, WAV, M4A.");
   err.status = 400;
   cb(err);
 };
