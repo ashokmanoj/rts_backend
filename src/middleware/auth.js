@@ -101,32 +101,62 @@ async function authorizeRequestAccess(req, res, next) {
   try {
     const request = await prisma.request.findUnique({
       where: { id: requestId },
-      select: { empId: true, dept: true, assignedDept: true, assignedPersonEmpId: true }
+      select: { empId: true, dept: true, assignedDept: true, assignedPersonEmpId: true, rmStatus: true, hodStatus: true, deptHodStatus: true, checkingBy: true }
     });
 
     if (!request) return res.status(404).json({ error: "Request not found." });
 
-    const { role, empId, dept: userDept } = req.user;
+    const role     = (req.user.role     || "").trim();
+    const empId    = (req.user.empId    || "").trim();
+    const userDept = (req.user.dept     || "").trim();
+    const userName = (req.user.name     || "").trim();
+
+    if (!empId || !role) return res.status(401).json({ error: "Invalid token payload." });
+
+    const reqDept      = (request.dept             || "").trim();
+    const reqAssigned  = (request.assignedDept     || "").trim();
+    const reqOwner     = (request.empId            || "").trim();
+    const reqPersonIds = (request.assignedPersonEmpId || "").trim();
+    const reqCheckedBy = (request.checkingBy       || "").trim();
+    const rmStatus     = (request.rmStatus         || "").trim();
+    const hodStatus    = (request.hodStatus        || "").trim();
+    const deptHodStatus= (request.deptHodStatus    || "").trim();
 
     // Admin and Management see everything
     if (["Admin", "Management"].includes(role)) return next();
 
     // Owner can always see their own request
-    if (request.empId === empId) return next();
+    if (reqOwner && reqOwner === empId) return next();
 
-    // RM / HOD / DeptHOD of the owner's dept or the assigned dept see everything
+    // RM / HOD / DeptHOD: allow if dept matches, OR already acted, OR directly manages the owner
     if (["RM", "HOD", "DeptHOD"].includes(role)) {
-      if (request.dept === userDept || request.assignedDept === userDept) return next();
+      if (userDept && (reqDept === userDept || reqAssigned === userDept)) return next();
+      // Already acted — allow continued access even if request was forwarded away from their dept
+      const hasActed =
+        (role === "RM"      && rmStatus      && rmStatus      !== "--") ||
+        (role === "HOD"     && hodStatus     && hodStatus     !== "--") ||
+        (role === "DeptHOD" && deptHodStatus && deptHodStatus !== "--") ||
+        (reqCheckedBy && userName && reqCheckedBy.includes(userName));
+      if (hasActed) return next();
+      // RM/HOD: also allow if they are the direct manager of the request owner (mirrors getAll filter)
+      if (reqOwner && (role === "RM" || role === "HOD")) {
+        const owner = await prisma.user.findUnique({
+          where: { empId: reqOwner },
+          select: { rmEmpId: true, hodEmpId: true },
+        });
+        if (owner) {
+          if (role === "RM"  && owner.rmEmpId  === empId) return next();
+          if (role === "HOD" && owner.hodEmpId === empId) return next();
+        }
+      }
     }
 
     // Regular staff in the assigned department
-    if (request.assignedDept === userDept) {
-      // If specific persons are named, only they can access it
-      if (request.assignedPersonEmpId) {
-        const ids = request.assignedPersonEmpId.split(",").map(s => s.trim());
+    if (userDept && reqAssigned === userDept) {
+      if (reqPersonIds) {
+        const ids = reqPersonIds.split(",").map(s => s.trim()).filter(Boolean);
         if (ids.includes(empId)) return next();
       } else {
-        // No specific person — whole dept can access
         return next();
       }
     }

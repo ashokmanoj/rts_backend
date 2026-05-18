@@ -20,6 +20,7 @@ const ALLOWED_EXTENSIONS = new Set([
   ".jpeg", ".jpg", ".png",
   ".pdf", ".docx",
   ".xlsx", ".csv",
+  ".zip", ".rar",
   ".mp3", ".wav", ".m4a",
 ]);
 
@@ -28,7 +29,9 @@ const fileFilter = (_req, file, cb) => {
   if (ALLOWED_EXTENSIONS.has(ext)) {
     return cb(null, true);
   }
-  cb(new Error("Invalid file type. Allowed: JPG, PNG, PDF, DOCX, XLSX, CSV, MP3, WAV, M4A."));
+  const err = new Error("Invalid file type. Allowed: JPG, PNG, PDF, DOCX, XLSX, CSV, ZIP, RAR, MP3, WAV, M4A.");
+  err.status = 400;
+  cb(err);
 };
 
 const maxSize = (Number(process.env.MAX_FILE_SIZE_MB) || 10) * 1024 * 1024;
