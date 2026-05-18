@@ -33,9 +33,10 @@ class RequestService {
     if (status === "closed") closureFilter = { resolvedDate: { not: null } };
 
     let assignedStatusFilter = {};
-    if (assignedStatus === "Open") assignedStatusFilter = { assignedStatus: "Open" };
-    else if (assignedStatus === "Checking") assignedStatusFilter = { assignedStatus: "Checking" };
-    else if (assignedStatus === "Closed") assignedStatusFilter = { assignedStatus: { contains: "(Closed)" } };
+    if (assignedStatus === "Open")                      assignedStatusFilter = { assignedStatus: "Open" };
+    else if (assignedStatus === "Checking")             assignedStatusFilter = { assignedStatus: "Checking" };
+    else if (assignedStatus === "Pending Acknowledgement") assignedStatusFilter = { assignedStatus: "Pending Acknowledgement" };
+    else if (assignedStatus === "Closed")               assignedStatusFilter = { assignedStatus: { contains: "(Closed)" } };
 
     let roleFilter = {};
     if (role === "Management" || role === "Admin") {
