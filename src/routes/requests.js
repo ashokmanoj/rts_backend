@@ -25,8 +25,8 @@ router.patch("/:id/hod-approval", authorize("Management"), authorizeRequestAcces
 // GET single request by ID
 router.get("/:id", authorizeRequestAccess, ctrl.getById);
 
-// CREATE request (with optional files — up to 5)
-router.post("/", upload.array("files", 5), ctrl.create);
+// CREATE request (with optional files — up to 10)
+router.post("/", upload.array("files", 10), ctrl.create);
 
 // APPROVAL flow
 router.patch("/:id/approval", authorizeRequestAccess, ctrl.approval);

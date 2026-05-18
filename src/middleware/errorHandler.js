@@ -14,6 +14,11 @@ function errorHandler(err, req, res, next) {  // eslint-disable-line no-unused-v
     });
   }
 
+  // Multer unexpected field / too many files
+  if (err.code === "LIMIT_UNEXPECTED_FILE") {
+    return res.status(400).json({ error: "Too many files. Maximum 10 files allowed per request." });
+  }
+
   const status = err.status || 500;
   
   // Only show detailed error message if in development or if it's a client error (4xx)
