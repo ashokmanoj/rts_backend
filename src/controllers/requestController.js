@@ -139,4 +139,24 @@ async function getUsersByDept(req, res, next) {
   }
 }
 
-module.exports = { getAll, getById, getFilterOptions, create, approval, markSeen, markUnread, close, getHodPending, hodApproval, acknowledge, getUsersByDept };
+async function deleteRequest(req, res, next) {
+  try {
+    const reqId = Number(req.params.id);
+    const result = await requestService.deleteRequest(reqId, req.user);
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function editRequest(req, res, next) {
+  try {
+    const reqId = Number(req.params.id);
+    const result = await requestService.editRequest(reqId, req.user, req.body);
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports = { getAll, getById, getFilterOptions, create, approval, markSeen, markUnread, close, getHodPending, hodApproval, acknowledge, getUsersByDept, deleteRequest, editRequest };

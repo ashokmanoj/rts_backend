@@ -11,7 +11,7 @@ const adminService = require("../services/adminService");
 
 function isUserAdminLike(user) {
   const { role, dept } = user;
-  return ["Admin", "Management"].includes(role) || (role === "DeptHOD" && dept === "HR");
+  return ["SuperUser", "Admin", "Management"].includes(role) || (role === "DeptHOD" && dept === "HR");
 }
 
 async function getUserLogReport(req, res, next) {
@@ -69,4 +69,16 @@ async function updateUser(req, res, next) {
   }
 }
 
-module.exports = { getUserLogReport, createUser, toggleUserStatus, getDeptTrackingReport, updateUser };
+async function resetPassword(req, res, next) {
+  try {
+    if (req.user.role !== "SuperUser") return res.status(403).json({ error: "Access denied." });
+    const { empId } = req.params;
+    const { newPassword } = req.body;
+    await adminService.resetPassword(empId, newPassword);
+    res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports = { getUserLogReport, createUser, toggleUserStatus, getDeptTrackingReport, updateUser, resetPassword };

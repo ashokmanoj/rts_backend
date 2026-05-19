@@ -39,7 +39,7 @@ class RequestService {
     else if (assignedStatus === "Closed")               assignedStatusFilter = { assignedStatus: { contains: "(Closed)" } };
 
     let roleFilter = {};
-    if (role === "Management" || role === "Admin") {
+    if (role === "SuperUser" || role === "Management" || role === "Admin") {
       roleFilter = {};
     } else if (role === "DeptHOD") {
       roleFilter = { OR: [{ empId }, { dept: userDept }, { assignedDept: userDept }] };
@@ -140,7 +140,7 @@ class RequestService {
   async getFilterOptions(user) {
     const { role, empId, dept: userDept } = user;
     let roleFilter = {};
-    if (role === "Management" || role === "Admin") {
+    if (role === "SuperUser" || role === "Management" || role === "Admin") {
       roleFilter = {};
     } else if (role === "DeptHOD") {
       roleFilter = { OR: [{ empId }, { dept: userDept }, { assignedDept: userDept }] };
@@ -314,23 +314,12 @@ class RequestService {
   async getHodPendingRequests(user) {
     const requests = await prisma.request.findMany({
       where: {
-        OR: [
-          {
-            requestorRole: "HOD",
-            hodStatus:     { in: ["--", "Checking"] },
-            rmStatus:      { not: "Rejected" },
-            isClosed:      false,
-          },
-          {
-            isClosed: false,
-            owner: {
-              OR: [
-                { rmEmpId:  { in: ["GN-01", "GN-02"] } },
-                { hodEmpId: { in: ["GN-01", "GN-02"] } },
-              ],
-            },
-          },
-        ],
+        owner: {
+          OR: [
+            { rmEmpId:  { in: ["GN-01", "GN-02"] } },
+            { hodEmpId: { in: ["GN-01", "GN-02"] } },
+          ],
+        },
       },
       include: WITH_OWNER,
       orderBy: { createdAt: "desc" },
@@ -349,7 +338,7 @@ class RequestService {
     const isGnRequest = GN_MANAGERS.includes(existing.owner?.rmEmpId) || GN_MANAGERS.includes(existing.owner?.hodEmpId);
     const validDecisions = isGnRequest
       ? ["Approved", "Checking", "Rejected", "Close"]
-      : ["Approved", "Rejected"];
+      : ["Approved", "Rejected", "Close"];
 
     if (!validDecisions.includes(decision)) {
       throw new Error(`Decision must be one of: ${validDecisions.join(", ")}.`);
@@ -446,6 +435,37 @@ class RequestService {
 
   async markUnread(requestId, empId) {
     return prisma.requestRead.deleteMany({ where: { requestId, empId } });
+  }
+
+  async deleteRequest(reqId, user) {
+    if (user.role !== "SuperUser") throw new Error("Only SuperUser can delete requests.");
+    const existing = await prisma.request.findUnique({ where: { id: reqId } });
+    if (!existing) throw new Error("Request not found.");
+    // Cascade: chat messages, read records, close ticket records deleted via DB relations
+    await prisma.request.delete({ where: { id: reqId } });
+    return { success: true };
+  }
+
+  async editRequest(reqId, user, body) {
+    if (user.role !== "SuperUser") throw new Error("Only SuperUser can edit requests.");
+    const existing = await prisma.request.findUnique({ where: { id: reqId }, include: WITH_OWNER });
+    if (!existing) throw new Error("Request not found.");
+
+    const { purpose, description, assignedDept, assignedDepts, dueDate, assignedPersonEmpId, assignedPersonName } = body;
+    const updateData = {};
+    if (purpose           !== undefined) updateData.purpose           = purpose;
+    if (description       !== undefined) updateData.description       = description;
+    if (assignedDept      !== undefined) updateData.assignedDept      = assignedDept;
+    if (assignedDepts     !== undefined) updateData.assignedDepts     = assignedDepts || null;
+    if (assignedPersonEmpId !== undefined) updateData.assignedPersonEmpId = assignedPersonEmpId || null;
+    if (assignedPersonName  !== undefined) updateData.assignedPersonName  = assignedPersonName  || null;
+    if (dueDate !== undefined) updateData.dueDate = dueDate ? new Date(dueDate) : null;
+
+    const updated = await prisma.request.update({ where: { id: reqId }, data: updateData, include: WITH_OWNER });
+    await prisma.chatMessage.create({
+      data: { requestId: reqId, authorId: user.empId, author: user.name, role: user.role, type: "system", text: `✏️ Request edited by ${user.name} (SuperUser).` },
+    });
+    return formatRequest(updated, user.empId);
   }
 }
 

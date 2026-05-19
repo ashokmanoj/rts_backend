@@ -41,6 +41,10 @@ router.patch("/:id/acknowledge", authorizeRequestAccess, ctrl.acknowledge);
 // Close request (optional file)
 router.patch("/:id/close", upload.single("file"), authorizeRequestAccess, ctrl.close);
 
+// SuperUser only: edit or delete a request
+router.patch("/:id/edit",   authorize("SuperUser"), ctrl.editRequest);
+router.delete("/:id",       authorize("SuperUser"), ctrl.deleteRequest);
+
 // ================= CHAT ROUTES =================
 
 // Get messages for request

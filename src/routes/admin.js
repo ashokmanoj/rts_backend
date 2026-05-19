@@ -1,5 +1,5 @@
 const router = require("express").Router({ caseSensitive: true });
-const { getUserLogReport, createUser, toggleUserStatus, getDeptTrackingReport, updateUser } = require("../controllers/adminController");
+const { getUserLogReport, createUser, toggleUserStatus, getDeptTrackingReport, updateUser, resetPassword } = require("../controllers/adminController");
 const { authenticate } = require("../middleware/auth");
 
 // All routes require authentication
@@ -19,5 +19,8 @@ router.patch("/toggle-status/:empId", toggleUserStatus);
 
 // PATCH /api/admin/update-user/:empId
 router.patch("/update-user/:empId", updateUser);
+
+// PATCH /api/admin/reset-password/:empId  (SuperUser only)
+router.patch("/reset-password/:empId", resetPassword);
 
 module.exports = router;

@@ -131,6 +131,14 @@ class AdminService {
   async toggleUserStatus(empId, isActive) {
     return prisma.user.update({ where: { empId }, data: { isActive } });
   }
+
+  async resetPassword(empId, newPassword) {
+    if (!newPassword || newPassword.length < 6)
+      throw new Error("Password must be at least 6 characters.");
+    const hash = await bcrypt.hash(newPassword, 10);
+    await prisma.user.update({ where: { empId }, data: { passwordHash: hash } });
+    return { success: true };
+  }
 }
 
 module.exports = new AdminService();

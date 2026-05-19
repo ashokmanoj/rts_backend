@@ -21,6 +21,7 @@ enum Role {
   HR
   FoodCommittee
   Intern
+  SuperUser
 }
 
 enum MessageType {

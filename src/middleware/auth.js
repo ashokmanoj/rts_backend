@@ -69,9 +69,11 @@ function authenticateTemp(req, res, next) {
 /**
  * Role guard factory — use after authenticate.
  * Example: authorize("RM", "HOD", "Admin")
+ * SuperUser always passes.
  */
 function authorize(...roles) {
   return (req, res, next) => {
+    if (req.user?.role === "SuperUser") return next();
     if (!roles.includes(req.user?.role)) {
       return res.status(403).json({ error: "Access denied." });
     }
@@ -82,9 +84,11 @@ function authorize(...roles) {
 /**
  * Allows only DeptHOD of HR or DeptHOD of Food Committee.
  * Used for food report/download endpoints.
+ * SuperUser always passes.
  */
 function authorizeHODReport(req, res, next) {
   const { role, dept } = req.user || {};
+  if (role === "SuperUser") return next();
   const allowed = role === 'DeptHOD' && ['HR', 'Food Committee'].includes(dept);
   if (!allowed) return res.status(403).json({ error: 'Access denied.' });
   next();
@@ -122,8 +126,8 @@ async function authorizeRequestAccess(req, res, next) {
     const hodStatus    = (request.hodStatus        || "").trim();
     const deptHodStatus= (request.deptHodStatus    || "").trim();
 
-    // Admin and Management see everything
-    if (["Admin", "Management"].includes(role)) return next();
+    // SuperUser, Admin, and Management see everything
+    if (["SuperUser", "Admin", "Management"].includes(role)) return next();
 
     // Owner can always see their own request
     if (reqOwner && reqOwner === empId) return next();
