@@ -9,6 +9,9 @@
 
 const prisma = require("../config/database");
 
+const toDate = (d) => new Date(d).toLocaleDateString("en-IN");
+const toTime = (d) => new Date(d).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
+
 class ChatService {
   buildFileUrl(req, filename) {
     if (!filename) return null;
@@ -23,6 +26,8 @@ class ChatService {
     });
     return messages.map(m => ({
       ...m,
+      date: toDate(m.createdAt),
+      time: toTime(m.createdAt),
       replyTo: m.replyTo ? JSON.parse(m.replyTo) : null,
     }));
   }
@@ -61,7 +66,12 @@ class ChatService {
       where: { requestId, empId: { not: user.empId } }
     });
 
-    return { ...saved, replyTo: saved.replyTo ? JSON.parse(saved.replyTo) : null };
+    return {
+      ...saved,
+      date: toDate(saved.createdAt),
+      time: toTime(saved.createdAt),
+      replyTo: saved.replyTo ? JSON.parse(saved.replyTo) : null,
+    };
   }
 }
 
