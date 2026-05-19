@@ -185,6 +185,7 @@ model ChatMessage {
   authorId     String      @map("author_id")
   author       String
   role         String
+  dept         String?
   type         MessageType @default(message)
   text         String?     @default("")
   fileUrl      String?     @map("file_url")

@@ -235,7 +235,7 @@ class RequestService {
     let updateData = {};
     if (decision === "Checking") {
       updateData.assignedStatus = "Checking";
-      updateData.checkingBy     = `${user.name} (${user.role})`;
+      updateData.checkingBy     = `${user.name} (${user.dept} - ${user.role})`;
       if (body.checkingDeadline) updateData.checkingDeadline = new Date(body.checkingDeadline);
       if (body.checkingReason)   updateData.checkingReason   = body.checkingReason;
     }
@@ -267,6 +267,7 @@ class RequestService {
         authorId: user.empId,
         author: user.name,
         role: user.role,
+        dept: user.dept,
         type: "approval",
         text: comment || `${decision} the request.`,
         status: decision,
@@ -369,6 +370,7 @@ class RequestService {
         authorId:  user.empId,
         author:    user.name,
         role:      user.role,
+        dept:      user.dept,
         type:      "approval",
         text:      comment || `${decision} the request.`,
         status:    decision === "Close" ? "Closed" : decision,
