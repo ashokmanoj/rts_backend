@@ -299,6 +299,83 @@ class FoodService {
 
     return { period: periodName, data: reportData };
   }
+
+  // ── SuperUser admin CRUD ──────────────────────────────────────────────────
+
+  async getAllSubscriptions() {
+    const subs = await prisma.foodSubscription.findMany({
+      include: { user: { select: { name: true, dept: true, designation: true } } },
+      orderBy: { createdAt: "desc" },
+    });
+    return subs.map(s => ({
+      empId:         s.empId,
+      name:          s.user?.name        || s.empId,
+      dept:          s.user?.dept        || "—",
+      designation:   s.user?.designation || "—",
+      isActive:      s.isActive,
+      startDate:     s.startDate     ? new Date(s.startDate).toLocaleDateString("en-IN")     : "—",
+      suspendedFrom: s.suspendedFrom ? new Date(s.suspendedFrom).toLocaleDateString("en-IN") : null,
+      createdAt:     new Date(s.createdAt).toLocaleDateString("en-IN"),
+    }));
+  }
+
+  async adminSubscribe(empId, period = "permanent", periodDate = null) {
+    const user = await prisma.user.findUnique({ where: { empId } });
+    if (!user) throw new Error("User not found.");
+
+    const { getNowIST } = require("../utils/workingDays");
+    const now          = getNowIST();
+    const defaultStart = getNextMonday(now);
+
+    let startDate    = defaultStart;
+    let suspendedFrom = null;
+
+    if (period === "weekly" && periodDate) {
+      const d   = new Date(periodDate);
+      d.setHours(0, 0, 0, 0);
+      const day  = d.getDay();
+      const diff = day === 0 ? -6 : 1 - day;
+      const monday = new Date(d);
+      monday.setDate(d.getDate() + diff);
+      const nextMon = new Date(monday);
+      nextMon.setDate(monday.getDate() + 7);
+      startDate    = monday >= now ? monday : defaultStart;
+      suspendedFrom = nextMon;
+    } else if (period === "monthly" && periodDate) {
+      const [y, m]    = periodDate.split("-").map(Number);
+      const first     = new Date(y, m - 1, 1);
+      const offset    = (8 - first.getDay()) % 7;
+      const firstMon  = new Date(y, m - 1, 1 + offset);
+      const nxtFirst  = new Date(y, m, 1);
+      const nxtOffset = (8 - nxtFirst.getDay()) % 7;
+      const nxtMon    = new Date(y, m, 1 + nxtOffset);
+      startDate    = firstMon >= now ? firstMon : defaultStart;
+      suspendedFrom = nxtMon;
+    }
+
+    const existing = await prisma.foodSubscription.findUnique({ where: { empId } });
+    if (existing) {
+      return prisma.foodSubscription.update({
+        where: { empId },
+        data: { isActive: true, startDate, suspendedFrom },
+      });
+    }
+    return prisma.foodSubscription.create({
+      data: { empId, isActive: true, startDate, suspendedFrom },
+    });
+  }
+
+  async adminToggle(empId, isActive) {
+    return prisma.foodSubscription.update({ where: { empId }, data: { isActive } });
+  }
+
+  async adminDelete(empId) {
+    await prisma.$transaction([
+      prisma.foodCancellation.deleteMany({ where: { empId } }),
+      prisma.foodSubscription.delete({ where: { empId } }),
+    ]);
+    return { success: true };
+  }
 }
 
 module.exports = new FoodService();

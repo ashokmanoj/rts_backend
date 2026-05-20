@@ -95,7 +95,7 @@ async function getCalendar(req, res, next) {
 async function getReport(req, res, next) {
   try {
     const { role, dept } = req.user;
-    const filterDept = (role === 'DeptHOD' && ['HR', 'Food Committee'].includes(dept)) ? null : dept;
+    const filterDept = (role === 'SuperUser' || (role === 'DeptHOD' && ['HR', 'Food Committee'].includes(dept))) ? null : dept;
     const report = await foodService.getReport(filterDept, req.query);
     res.json(report);
   } catch (err) { next(err); }
@@ -104,7 +104,7 @@ async function getReport(req, res, next) {
 async function downloadReport(req, res, next) {
   try {
     const { role, dept } = req.user;
-    const filterDept = (role === 'DeptHOD' && ['HR', 'Food Committee'].includes(dept)) ? null : dept;
+    const filterDept = (role === 'SuperUser' || (role === 'DeptHOD' && ['HR', 'Food Committee'].includes(dept))) ? null : dept;
     const report = await foodService.getReport(filterDept, req.query);
 
     // CSV Injection protection: Escape fields starting with =, +, -, @
@@ -125,6 +125,36 @@ async function downloadReport(req, res, next) {
   } catch (err) { next(err); }
 }
 
+async function adminGetAll(req, res, next) {
+  try { res.json(await foodService.getAllSubscriptions()); }
+  catch (err) { next(err); }
+}
+
+async function adminSubscribe(req, res, next) {
+  try {
+    const { period, periodDate } = req.body;
+    await foodService.adminSubscribe(req.params.empId, period, periodDate);
+    res.json({ success: true });
+  } catch (err) {
+    if (err.message === "User not found.") return res.status(404).json({ error: err.message });
+    next(err);
+  }
+}
+
+async function adminToggle(req, res, next) {
+  try {
+    await foodService.adminToggle(req.params.empId, req.body.isActive);
+    res.json({ success: true });
+  } catch (err) { next(err); }
+}
+
+async function adminDelete(req, res, next) {
+  try {
+    await foodService.adminDelete(req.params.empId);
+    res.json({ success: true });
+  } catch (err) { next(err); }
+}
+
 module.exports = {
   subscribe, getStatus,
   cancelNextWeek, undoCancelNextWeek,
@@ -132,4 +162,5 @@ module.exports = {
   enableNextWeekOnly, undoEnableNextWeek,
   enableYear, disableYear,
   getCalendar, getReport, downloadReport,
+  adminGetAll, adminSubscribe, adminToggle, adminDelete,
 };

@@ -73,11 +73,11 @@ function formatRequest(row, viewerEmpId) {
       closedDate:  pad(row.closeTicket.closedDate),
     } : null,
 
-    // Due date & priority
+    // Due date & priority (frozen once ticket is closed)
     dueDate:        row.dueDate ? new Date(row.dueDate).toLocaleDateString("en-IN") : null,
     dueDateRaw:     row.dueDate ?? null,
-    priority:       computePriority(row.dueDate),
-    daysUntilDue:   daysDiff(row.dueDate),
+    priority:       row.isClosed ? null : computePriority(row.dueDate),
+    daysUntilDue:   row.isClosed ? null : daysDiff(row.dueDate),
 
     // Checking deadline
     checkingDeadline:   row.checkingDeadline ? new Date(row.checkingDeadline).toLocaleDateString("en-IN") : null,

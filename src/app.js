@@ -33,8 +33,8 @@ app.use(helmet({
       imgSrc:     ["'self'", "data:", "blob:", "https://stucle-dev.sgp1.cdn.digitaloceanspaces.com"],
       connectSrc: [   // ← FIXED: added production URLs
         "'self'",
-        "http://localhost:5001",
-        "http://192.168.1.128:5001",
+        "http://localhost:5000",
+        "http://192.168.1.128:5000",
         "https://telerts.com",
         "https://www.telerts.com",
         "http://telerts.com",

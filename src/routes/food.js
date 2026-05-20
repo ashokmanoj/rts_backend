@@ -1,7 +1,7 @@
 'use strict';
 
 const router = require('express').Router({ caseSensitive: true });
-const { authenticate, authorizeHODReport } = require('../middleware/auth');
+const { authenticate, authorize, authorizeHODReport } = require('../middleware/auth');
 const {
   subscribe,
   getStatus,
@@ -16,6 +16,10 @@ const {
   getCalendar,
   getReport,
   downloadReport,
+  adminGetAll,
+  adminSubscribe,
+  adminToggle,
+  adminDelete,
 } = require('../controllers/foodController');
 
 router.use(authenticate);
@@ -42,5 +46,11 @@ router.post('/disable-year',           disableYear);
 router.get('/calendar',                getCalendar);
 router.get('/report',                  authorizeHODReport, getReport);
 router.get('/report/download',         authorizeHODReport, downloadReport);
+
+// SuperUser admin CRUD
+router.get('/admin/subscriptions',     authorize('SuperUser'), adminGetAll);
+router.post('/admin/subscribe/:empId', authorize('SuperUser'), adminSubscribe);
+router.patch('/admin/toggle/:empId',   authorize('SuperUser'), adminToggle);
+router.delete('/admin/unsubscribe/:empId', authorize('SuperUser'), adminDelete);
 
 module.exports = router;
