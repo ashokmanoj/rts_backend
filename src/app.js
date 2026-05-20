@@ -107,21 +107,22 @@ app.use("/api/food",     foodRoutes);
 app.use("/api/files",    fileRoutes);
 app.use("/api/push",     pushRoutes);
 
-// ── Serve static files from React app in production ──────────────────────────
-if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(path.join(__dirname, '../../rts_frontend/dist')));
-  app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, '../../rts_frontend/dist/index.html'));
-  });
-}
-
 // ── Health check ──────────────────────────────────────────────────────────────
 app.get("/api/health", (_req, res) =>
   res.json({ status: "ok", time: new Date().toISOString() })
 );
 
-// ── 404 ───────────────────────────────────────────────────────────────────────
-app.use((_req, res) => res.status(404).json({ error: "Route not found." }));
+// ── 404 for unmatched /api/* routes ───────────────────────────────────────────
+app.use("/api", (_req, res) => res.status(404).json({ error: "Route not found." }));
+
+// ── Serve static files from React app in production ──────────────────────────
+if (process.env.NODE_ENV === 'production') {
+  app.use(express.static(path.join(__dirname, '../../rts_frontend/dist')));
+  // Only serve index.html for non-API routes (client-side routing)
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, '../../rts_frontend/dist/index.html'));
+  });
+}
 
 // ── Global error handler ──────────────────────────────────────────────────────
 app.use(errorHandler);
