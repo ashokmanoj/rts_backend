@@ -1,5 +1,5 @@
 const router = require("express").Router({ caseSensitive: true });
-const { getUserLogReport, createUser, toggleUserStatus, getDeptTrackingReport, updateUser, resetPassword } = require("../controllers/adminController");
+const { getUserLogReport, createUser, bulkCreateUsers, toggleUserStatus, getDeptTrackingReport, updateUser, resetPassword } = require("../controllers/adminController");
 const { authenticate } = require("../middleware/auth");
 
 // All routes require authentication
@@ -13,6 +13,9 @@ router.get("/dept-tracking-report", getDeptTrackingReport);
 
 // POST /api/admin/create-user
 router.post("/create-user", createUser);
+
+// POST /api/admin/bulk-create-users
+router.post("/bulk-create-users", bulkCreateUsers);
 
 // PATCH /api/admin/toggle-status/:empId
 router.patch("/toggle-status/:empId", toggleUserStatus);

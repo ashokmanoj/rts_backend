@@ -48,6 +48,19 @@ async function createUser(req, res, next) {
   }
 }
 
+async function bulkCreateUsers(req, res, next) {
+  try {
+    if (!isUserAdminLike(req.user)) return res.status(403).json({ error: "Access denied." });
+    const { users } = req.body;
+    if (!Array.isArray(users) || users.length === 0) return res.status(400).json({ error: "No users provided." });
+    if (users.length > 200) return res.status(400).json({ error: "Maximum 200 users per upload." });
+    const result = await adminService.bulkCreateUsers(users);
+    res.status(201).json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
 async function toggleUserStatus(req, res, next) {
   try {
     if (!isUserAdminLike(req.user)) return res.status(403).json({ error: "Access denied." });
@@ -81,4 +94,4 @@ async function resetPassword(req, res, next) {
   }
 }
 
-module.exports = { getUserLogReport, createUser, toggleUserStatus, getDeptTrackingReport, updateUser, resetPassword };
+module.exports = { getUserLogReport, createUser, bulkCreateUsers, toggleUserStatus, getDeptTrackingReport, updateUser, resetPassword };

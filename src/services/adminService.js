@@ -109,6 +109,20 @@ class AdminService {
     });
   }
 
+  async bulkCreateUsers(users) {
+    const created = [];
+    const failed  = [];
+    for (const data of users) {
+      try {
+        const user = await this.createUser(data);
+        created.push({ empId: user.empId, name: user.name });
+      } catch (err) {
+        failed.push({ empId: data.empId || "", name: data.name || "", reason: err.message });
+      }
+    }
+    return { created, failed };
+  }
+
   async updateUser(empId, data) {
     const { name, email, phone, role, dept, designation, location, rmEmpId, hodEmpId } = data;
     
