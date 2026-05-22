@@ -2,6 +2,7 @@
 
 const prisma = require("../config/database");
 const { sendPushToUser, sendPushToAllFoodSubscribers } = require("../utils/pushService");
+const { sendFcmToUser } = require("../utils/fcmService");
 
 const REMINDER_PAYLOAD = {
   title:              "🍱 Food Reminder",
@@ -73,4 +74,65 @@ async function triggerReminder(req, res, next) {
   }
 }
 
-module.exports = { getVapidKey, subscribe, unsubscribe, triggerReminder };
+/** POST /api/push/fcm-test  — any authenticated user can test their own device;
+ *  SuperUser/Admin can also specify a different empId to test any user.        */
+async function fcmTest(req, res, next) {
+  try {
+    const { title, body } = req.body;
+    const isAdminLike = ["SuperUser", "Admin", "Management"].includes(req.user.role) ||
+                        (req.user.role === "DeptHOD" && req.user.dept === "HR");
+
+    // Non-admins can only test themselves
+    let empId = req.body.empId || req.user.empId;
+    if (!isAdminLike) empId = req.user.empId;
+
+    const tokens = await prisma.fcmToken.findMany({ where: { empId } });
+    if (!tokens.length) return res.status(404).json({ error: `No FCM tokens registered for ${empId}. Open the Flutter app and log in first.` });
+
+    await sendFcmToUser(empId, {
+      title: title || "🔔 Test Notification",
+      body:  body  || "This is a test notification from RTS.",
+      url:   "/",
+      type:  "test",
+      tag:   "rts-test",
+    });
+
+    res.json({ success: true, empId, tokenCount: tokens.length });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/** POST /api/push/fcm-register  — Flutter sends its FCM token after login */
+async function fcmRegister(req, res, next) {
+  try {
+    // Accept any common field name the Flutter dev might use
+    const token = req.body.token || req.body.fcmToken || req.body.fcm_token || req.body.deviceToken || req.body.device_token;
+    if (!token) return res.status(400).json({ error: "token required. Send as: { \"token\": \"<fcm_token>\" }" });
+
+    await prisma.fcmToken.upsert({
+      where:  { token },
+      update: { empId: req.user.empId },
+      create: { empId: req.user.empId, token },
+    });
+
+    res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/** POST /api/push/fcm-unregister  — Flutter calls this on logout (no auth needed — token is unique) */
+async function fcmUnregister(req, res, next) {
+  try {
+    const token = req.body.token || req.body.fcmToken || req.body.fcm_token || req.body.deviceToken || req.body.device_token;
+    if (!token) return res.status(400).json({ error: "token required." });
+
+    await prisma.fcmToken.deleteMany({ where: { token } });
+    res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports = { getVapidKey, subscribe, unsubscribe, triggerReminder, fcmRegister, fcmUnregister, fcmTest };

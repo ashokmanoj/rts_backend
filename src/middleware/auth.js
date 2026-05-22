@@ -105,7 +105,7 @@ async function authorizeRequestAccess(req, res, next) {
   try {
     const request = await prisma.request.findUnique({
       where: { id: requestId },
-      select: { empId: true, dept: true, assignedDept: true, assignedPersonEmpId: true, rmStatus: true, hodStatus: true, deptHodStatus: true, checkingBy: true }
+      select: { empId: true, dept: true, assignedDept: true, assignedDepts: true, assignedPersonEmpId: true, rmStatus: true, hodStatus: true, deptHodStatus: true, checkingBy: true }
     });
 
     if (!request) return res.status(404).json({ error: "Request not found." });
@@ -125,6 +125,8 @@ async function authorizeRequestAccess(req, res, next) {
     const rmStatus     = (request.rmStatus         || "").trim();
     const hodStatus    = (request.hodStatus        || "").trim();
     const deptHodStatus= (request.deptHodStatus    || "").trim();
+    // assignedDepts is a comma-separated list of depts that can see this request (dual-visibility)
+    const assignedDeptsArr = (request.assignedDepts || "").split(",").map(s => s.trim()).filter(Boolean);
 
     // SuperUser, Admin, and Management see everything
     if (["SuperUser", "Admin", "Management"].includes(role)) return next();
@@ -134,7 +136,7 @@ async function authorizeRequestAccess(req, res, next) {
 
     // RM / HOD / DeptHOD: allow if dept matches, OR already acted, OR directly manages the owner
     if (["RM", "HOD", "DeptHOD"].includes(role)) {
-      if (userDept && (reqDept === userDept || reqAssigned === userDept)) return next();
+      if (userDept && (reqDept === userDept || reqAssigned === userDept || assignedDeptsArr.includes(userDept))) return next();
       // Already acted — allow continued access even if request was forwarded away from their dept
       const hasActed =
         (role === "RM"      && rmStatus      && rmStatus      !== "--") ||
@@ -155,15 +157,14 @@ async function authorizeRequestAccess(req, res, next) {
       }
     }
 
-    // Regular staff in the assigned department
-    if (userDept && reqAssigned === userDept) {
-      if (reqPersonIds) {
-        const ids = reqPersonIds.split(",").map(s => s.trim()).filter(Boolean);
-        if (ids.includes(empId)) return next();
-      } else {
-        return next();
-      }
+    // Specifically assigned person — can access regardless of dept
+    if (reqPersonIds) {
+      const ids = reqPersonIds.split(",").map(s => s.trim()).filter(Boolean);
+      if (ids.includes(empId)) return next();
     }
+
+    // Regular staff in the assigned department (no specific person assigned)
+    if (userDept && reqAssigned === userDept && !reqPersonIds) return next();
 
     return res.status(403).json({ error: "Access denied to this request." });
   } catch (error) {

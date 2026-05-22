@@ -1,7 +1,8 @@
 "use strict";
 
-const webpush = require("web-push");
-const prisma   = require("../config/database");
+const webpush          = require("web-push");
+const prisma           = require("../config/database");
+const { sendFcmToUser } = require("./fcmService");
 
 webpush.setVapidDetails(
   `mailto:${process.env.MAILER_USER || "noreply@example.com"}`,
@@ -14,7 +15,11 @@ webpush.setVapidDetails(
  * Expired subscriptions (410) are automatically cleaned up.
  */
 async function sendPushToUser(empId, payload) {
-  const subs = await prisma.pushSubscription.findMany({ where: { empId } });
+  const [subs] = await Promise.all([
+    prisma.pushSubscription.findMany({ where: { empId } }),
+    sendFcmToUser(empId, payload), // fire FCM in parallel — mobile devices
+  ]);
+
   if (!subs.length) return;
 
   const message = JSON.stringify(payload);
@@ -75,18 +80,23 @@ async function sendNewRequestNotification(request) {
 
   const recipients = new Set();
 
-  // Specific RM and HOD assigned to the requestor
   if (owner.rmEmpId)  recipients.add(owner.rmEmpId);
   if (owner.hodEmpId) recipients.add(owner.hodEmpId);
 
-  // DeptHOD of the assigned department (stored in base users table)
-  const deptHods = await prisma.user.findMany({
-    where:  { role: "DeptHOD", dept: request.assignedDept },
+  // DeptHOD + HOD + RM of the assigned department
+  const deptTeam = await prisma.user.findMany({
+    where:  { role: { in: ["DeptHOD", "HOD", "RM"] }, dept: request.assignedDept },
     select: { empId: true },
   });
-  deptHods.forEach(u => recipients.add(u.empId));
+  deptTeam.forEach(u => recipients.add(u.empId));
 
-  // GN-route: also notify Management users (stored in base users table)
+  if (request.assignedPersonEmpId) {
+    request.assignedPersonEmpId.split(",").forEach(id => {
+      const trimmed = id.trim();
+      if (trimmed) recipients.add(trimmed);
+    });
+  }
+
   const isGnRoute = GN_MANAGERS.includes(owner.rmEmpId) || GN_MANAGERS.includes(owner.hodEmpId);
   if (isGnRoute) {
     const mgmt = await prisma.user.findMany({
@@ -96,7 +106,6 @@ async function sendNewRequestNotification(request) {
     mgmt.forEach(u => recipients.add(u.empId));
   }
 
-  // Never notify the requestor themselves
   recipients.delete(request.empId);
 
   await Promise.allSettled(

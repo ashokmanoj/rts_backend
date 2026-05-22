@@ -2,3 +2,4 @@ node_modules/
 uploads/
 .env
 dist/
+src/config/apnd-apps-firebase-adminsdk-fbsvc-5f018d630d.json

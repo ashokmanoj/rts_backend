@@ -42,13 +42,14 @@ class RequestService {
     if (role === "SuperUser" || role === "Management" || role === "Admin") {
       roleFilter = {};
     } else if (role === "DeptHOD") {
-      roleFilter = { OR: [{ empId }, { dept: userDept }, { assignedDept: userDept }] };
+      roleFilter = { OR: [{ empId }, { dept: userDept }, { assignedDept: userDept }, { assignedDepts: { contains: userDept } }] };
     } else if (role === "RM") {
       roleFilter = {
         OR: [
           { empId },
           { owner: { rmEmpId: empId } },
           { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }] },
+          { assignedDepts: { contains: userDept } },
         ],
       };
     } else if (role === "HOD") {
@@ -57,14 +58,14 @@ class RequestService {
           { empId },
           { owner: { hodEmpId: empId } },
           { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }] },
+          { assignedDepts: { contains: userDept } },
         ],
       };
     } else {
-      // Regular staff: own requests + dept-wide requests with no specific assignee + specifically named
+      // Regular staff: only own requests + requests specifically assigned to them by ID
       roleFilter = {
         OR: [
           { empId },
-          { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }, { OR: [{ assignedPersonEmpId: null }, { assignedPersonEmpId: "" }] }] },
           { assignedPersonEmpId: { contains: empId } },
         ],
       };
@@ -143,13 +144,14 @@ class RequestService {
     if (role === "SuperUser" || role === "Management" || role === "Admin") {
       roleFilter = {};
     } else if (role === "DeptHOD") {
-      roleFilter = { OR: [{ empId }, { dept: userDept }, { assignedDept: userDept }] };
+      roleFilter = { OR: [{ empId }, { dept: userDept }, { assignedDept: userDept }, { assignedDepts: { contains: userDept } }] };
     } else if (role === "RM") {
       roleFilter = {
         OR: [
           { empId },
           { owner: { rmEmpId: empId } },
           { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }] },
+          { assignedDepts: { contains: userDept } },
         ],
       };
     } else if (role === "HOD") {
@@ -158,13 +160,13 @@ class RequestService {
           { empId },
           { owner: { hodEmpId: empId } },
           { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }] },
+          { assignedDepts: { contains: userDept } },
         ],
       };
     } else {
       roleFilter = {
         OR: [
           { empId },
-          { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }, { OR: [{ assignedPersonEmpId: null }, { assignedPersonEmpId: "" }] }] },
           { assignedPersonEmpId: { contains: empId } },
         ],
       };
@@ -243,11 +245,26 @@ class RequestService {
     if (decision === "Forwarded") {
       if (!newDept) throw new Error("newDept is required when forwarding.");
       updateData = { ...updateData, forwarded: true, forwardedBy: user.name, forwardedAt: now, assignedDept: newDept };
+      if (body.dualDept) {
+        const origDept = existing.assignedDept;
+        const existingDepts = existing.assignedDepts ? existing.assignedDepts.split(",").map(s => s.trim()).filter(Boolean) : [];
+        const allDepts = [...new Set([...existingDepts, origDept, newDept])];
+        updateData.assignedDepts = allDepts.join(",");
+        // DeptHOD forwarding via popup = they have also approved
+        if (user.role === "DeptHOD") {
+          updateData.deptHodStatus = "Approved";
+          updateData.deptHodDate   = now;
+        }
+      }
     } else if (["RM", "HOD", "DeptHOD", "Management"].includes(user.role)) {
       const field = user.role === "RM" ? "rmStatus" : user.role === "HOD" ? "hodStatus" : "deptHodStatus";
       const dateField = user.role === "RM" ? "rmDate" : user.role === "HOD" ? "hodDate" : "deptHodDate";
       updateData[field] = decision;
       updateData[dateField] = now;
+      if (user.role === "DeptHOD" && decision === "Approved" && body.assignedPersonEmpId) {
+        updateData.assignedPersonEmpId = body.assignedPersonEmpId;
+        updateData.assignedPersonName  = body.assignedPersonName || null;
+      }
     } else {
       const isTeamMember = existing.assignedDept === user.dept;
       const isAssigned = existing.assignedPersonEmpId
@@ -261,21 +278,57 @@ class RequestService {
 
     const updated = await prisma.request.update({ where: { id: reqId }, data: updateData, include: WITH_OWNER });
 
-    await prisma.chatMessage.create({
-      data: {
-        requestId: reqId,
-        authorId: user.empId,
-        author: user.name,
-        role: user.role,
-        dept: user.dept,
-        type: "approval",
-        text: comment || `${decision} the request.`,
-        status: decision,
-        purpose: updated.purpose,
-        changedDept: decision === "Forwarded" ? newDept : null,
-        originalDept: existing.assignedDept,
-      },
-    });
+    const isDeptHodPopupForward = decision === "Forwarded" && body.dualDept && user.role === "DeptHOD";
+
+    if (isDeptHodPopupForward) {
+      // Two messages: first Approved, then Forwarded — both visible in chat
+      await prisma.chatMessage.create({
+        data: {
+          requestId: reqId,
+          authorId:  user.empId,
+          author:    user.name,
+          role:      user.role,
+          dept:      user.dept,
+          type:      "approval",
+          text:      comment || "Approved the request.",
+          status:    "Approved",
+          purpose:   updated.purpose,
+          changedDept:  null,
+          originalDept: existing.assignedDept,
+        },
+      });
+      await prisma.chatMessage.create({
+        data: {
+          requestId: reqId,
+          authorId:  user.empId,
+          author:    user.name,
+          role:      user.role,
+          dept:      user.dept,
+          type:      "approval",
+          text:      `Forwarded to ${newDept} department.`,
+          status:    "Forwarded",
+          purpose:   updated.purpose,
+          changedDept:  newDept,
+          originalDept: existing.assignedDept,
+        },
+      });
+    } else {
+      await prisma.chatMessage.create({
+        data: {
+          requestId: reqId,
+          authorId:  user.empId,
+          author:    user.name,
+          role:      user.role,
+          dept:      user.dept,
+          type:      "approval",
+          text:      comment || `${decision} the request.`,
+          status:    decision,
+          purpose:   updated.purpose,
+          changedDept:  decision === "Forwarded" ? newDept : null,
+          originalDept: existing.assignedDept,
+        },
+      });
+    }
 
     return formatRequest(updated, user.empId);
   }

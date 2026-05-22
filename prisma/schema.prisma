@@ -68,6 +68,7 @@ model User {
   foodCancellations FoodCancellation[]
   userRoles         UserRole[]
   pushSubscriptions PushSubscription[]
+  fcmTokens         FcmToken[]
 
   @@map("users")
 }
@@ -253,5 +254,17 @@ model PushSubscription {
 
   @@index([empId])
   @@map("push_subscriptions")
+}
+
+model FcmToken {
+  id        String   @id @default(uuid())
+  empId     String   @map("emp_id")
+  token     String   @unique
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [empId], references: [empId], onDelete: Cascade)
+
+  @@index([empId])
+  @@map("fcm_tokens")
 }
   
