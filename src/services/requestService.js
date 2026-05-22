@@ -47,7 +47,7 @@ class RequestService {
       roleFilter = {
         OR: [
           { empId },
-          { owner: { rmEmpId: empId } },
+          { AND: [{ owner: { rmEmpId: empId } }, { dept: userDept }] },
           { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }] },
           { assignedDepts: { contains: userDept } },
         ],
@@ -56,13 +56,13 @@ class RequestService {
       roleFilter = {
         OR: [
           { empId },
-          { owner: { hodEmpId: empId } },
+          { AND: [{ owner: { hodEmpId: empId } }, { dept: userDept }] },
           { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }] },
           { assignedDepts: { contains: userDept } },
         ],
       };
-    } else if (userDept === "Academic") {
-      // Academic staff: only own requests + specifically assigned
+    } else if (["Academic", "Animation", "Software"].includes(userDept)) {
+      // These depts: only own requests + specifically assigned (no dept-wide visibility)
       roleFilter = {
         OR: [
           { empId },
@@ -70,7 +70,7 @@ class RequestService {
         ],
       };
     } else {
-      // Regular staff (non-Academic): own requests + incoming dept requests + specifically assigned
+      // Other regular staff: own requests + incoming to their dept + specifically assigned
       roleFilter = {
         OR: [
           { empId },
@@ -158,7 +158,7 @@ class RequestService {
       roleFilter = {
         OR: [
           { empId },
-          { owner: { rmEmpId: empId } },
+          { AND: [{ owner: { rmEmpId: empId } }, { dept: userDept }] },
           { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }] },
           { assignedDepts: { contains: userDept } },
         ],
@@ -167,12 +167,12 @@ class RequestService {
       roleFilter = {
         OR: [
           { empId },
-          { owner: { hodEmpId: empId } },
+          { AND: [{ owner: { hodEmpId: empId } }, { dept: userDept }] },
           { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }] },
           { assignedDepts: { contains: userDept } },
         ],
       };
-    } else if (userDept === "Academic") {
+    } else if (["Academic", "Animation", "Software"].includes(userDept)) {
       roleFilter = {
         OR: [
           { empId },

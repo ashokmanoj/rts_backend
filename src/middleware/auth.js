@@ -151,8 +151,8 @@ async function authorizeRequestAccess(req, res, next) {
           select: { rmEmpId: true, hodEmpId: true },
         });
         if (owner) {
-          if (role === "RM"  && owner.rmEmpId  === empId) return next();
-          if (role === "HOD" && owner.hodEmpId === empId) return next();
+          if (role === "RM"  && owner.rmEmpId  === empId && reqDept === userDept) return next();
+          if (role === "HOD" && owner.hodEmpId === empId && reqDept === userDept) return next();
         }
       }
     }
@@ -163,8 +163,9 @@ async function authorizeRequestAccess(req, res, next) {
       if (ids.includes(empId)) return next();
     }
 
-    // Non-Academic regular staff can see incoming requests assigned to their dept (no specific person assigned)
-    if (userDept && userDept !== "Academic" && reqAssigned === userDept && reqDept !== userDept && !reqPersonIds) return next();
+    // Only non-restricted regular staff can see incoming requests assigned to their dept
+    const deptOwnOnly = ["Academic", "Animation", "Software"];
+    if (userDept && !deptOwnOnly.includes(userDept) && reqAssigned === userDept && reqDept !== userDept && !reqPersonIds) return next();
 
     return res.status(403).json({ error: "Access denied to this request." });
   } catch (error) {

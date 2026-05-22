@@ -46,7 +46,7 @@ async function sendPushToUser(empId, payload) {
  */
 async function sendPushToAllFoodSubscribers(payload) {
   const activeSubs = await prisma.foodSubscription.findMany({
-    where: { isActive: true, suspendedFrom: null },
+    where: { isActive: true, suspendedFrom: null, user: { location: "Bangalore" } },
     select: { empId: true },
   });
 
