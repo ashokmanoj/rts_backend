@@ -163,8 +163,8 @@ async function authorizeRequestAccess(req, res, next) {
       if (ids.includes(empId)) return next();
     }
 
-    // Regular staff in the assigned department (no specific person assigned)
-    if (userDept && reqAssigned === userDept && !reqPersonIds) return next();
+    // Non-Academic regular staff can see incoming requests assigned to their dept (no specific person assigned)
+    if (userDept && userDept !== "Academic" && reqAssigned === userDept && reqDept !== userDept && !reqPersonIds) return next();
 
     return res.status(403).json({ error: "Access denied to this request." });
   } catch (error) {

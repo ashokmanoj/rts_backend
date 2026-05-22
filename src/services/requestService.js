@@ -61,11 +61,20 @@ class RequestService {
           { assignedDepts: { contains: userDept } },
         ],
       };
-    } else {
-      // Regular staff: only own requests + requests specifically assigned to them by ID
+    } else if (userDept === "Academic") {
+      // Academic staff: only own requests + specifically assigned
       roleFilter = {
         OR: [
           { empId },
+          { assignedPersonEmpId: { contains: empId } },
+        ],
+      };
+    } else {
+      // Regular staff (non-Academic): own requests + incoming dept requests + specifically assigned
+      roleFilter = {
+        OR: [
+          { empId },
+          { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }] },
           { assignedPersonEmpId: { contains: empId } },
         ],
       };
@@ -163,10 +172,18 @@ class RequestService {
           { assignedDepts: { contains: userDept } },
         ],
       };
+    } else if (userDept === "Academic") {
+      roleFilter = {
+        OR: [
+          { empId },
+          { assignedPersonEmpId: { contains: empId } },
+        ],
+      };
     } else {
       roleFilter = {
         OR: [
           { empId },
+          { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }] },
           { assignedPersonEmpId: { contains: empId } },
         ],
       };
