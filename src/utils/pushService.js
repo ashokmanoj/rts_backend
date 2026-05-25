@@ -76,6 +76,7 @@ async function sendNewRequestNotification(request) {
     requireInteraction: false,
     type:  "new_request",
     url:   "/",
+    data:  { action: "new_request", channel_id: "new_request_channel" },
   };
 
   const recipients = new Set();

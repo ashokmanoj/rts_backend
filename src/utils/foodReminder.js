@@ -14,7 +14,8 @@ const REMINDER_PAYLOAD = {
     { action: "yes", title: "Yes, I'm done ✓" },
     { action: "no",  title: "No, take me there →" },
   ],
-  url: "/?tab=food",
+  url:  "/?tab=food",
+  data: { action: "food_reminder", channel_id: "food_reminder_channel" },
 };
 
 // Saturday 4 PM IST — status check for next week
@@ -29,7 +30,8 @@ const SAT_STATUS_PAYLOAD = {
     { action: "yes", title: "View Status →" },
     { action: "no",  title: "Update Now →" },
   ],
-  url: "/?tab=food",
+  url:  "/?tab=food",
+  data: { action: "food_reminder", channel_id: "food_reminder_channel" },
 };
 
 async function fireReminder(day, payload = REMINDER_PAYLOAD) {

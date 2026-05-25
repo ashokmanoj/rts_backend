@@ -23,15 +23,18 @@ async function sendFcmToUser(empId, payload) {
             body:  payload.body,
           },
           data: {
-            url:  payload.url  || "/",
-            type: payload.type || "general",
-            tag:  payload.tag  || "",
+            url:        payload.url              || "/",
+            type:       payload.type             || "general",
+            tag:        payload.tag              || "",
+            action:     payload.data?.action     || "general",
+            channel_id: payload.data?.channel_id || "rts_notifications",
           },
           android: {
             notification: {
               sound:     "default",
-              channelId: "rts_notifications",
+              channelId: payload.data?.channel_id || "rts_notifications",
             },
+            priority: "high",
           },
           apns: {
             payload: { aps: { sound: "default" } },

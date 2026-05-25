@@ -15,7 +15,8 @@ const REMINDER_PAYLOAD = {
     { action: "yes", title: "Yes, I'm done ✓" },
     { action: "no",  title: "No, take me there →" },
   ],
-  url: "/?tab=food",
+  url:  "/?tab=food",
+  data: { action: "food_reminder", channel_id: "food_reminder_channel" },
 };
 
 /** GET /api/push/vapid-public-key  — client needs this to subscribe */
