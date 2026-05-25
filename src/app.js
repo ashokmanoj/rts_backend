@@ -117,9 +117,16 @@ app.use("/api", (_req, res) => res.status(404).json({ error: "Route not found." 
 
 // ── Serve static files from React app in production ──────────────────────────
 if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(path.join(__dirname, '../../rts_frontend/dist')));
-  // Only serve index.html for non-API routes (client-side routing)
+  // Hashed assets (JS/CSS/images) — cache for 1 year, they change filename on every build
+  app.use(express.static(path.join(__dirname, '../../rts_frontend/dist'), {
+    maxAge: '1y',
+    immutable: true,
+  }));
+  // index.html — never cache so users always get the latest build
   app.get('*', (req, res) => {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
     res.sendFile(path.join(__dirname, '../../rts_frontend/dist/index.html'));
   });
 }
