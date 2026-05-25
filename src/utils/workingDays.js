@@ -88,18 +88,22 @@ function calculateWorkingDays(startDate, endDate, holidays = [], cancelledWeekSt
   return count;
 }
 
-// Window open: Monday through Saturday all day + Sunday before 10:30 AM IST
-// Closes Sunday at 10:30 AM IST (food already ordered for next week)
+// Window open: Monday through Saturday before 6:30 PM IST
+// Closes Saturday at 6:30 PM IST (food already ordered for next week)
 function canCancelNow() {
   const now  = getNowIST();
   const day  = now.getDay();   // 0=Sun, 6=Sat
   const hour = now.getHours();
   const min  = now.getMinutes();
   if (day === 0) {
-    // Sunday: open only before 10:30 AM IST
-    return hour < 10 || (hour === 10 && min < 30);
+    // Sunday: always closed
+    return false;
   }
-  return true; // Mon–Sat: always open
+  if (day === 6) {
+    // Saturday: open only before 6:30 PM IST
+    return hour < 18 || (hour === 18 && min < 30);
+  }
+  return true; // Mon–Fri: always open
 }
 
 module.exports = {

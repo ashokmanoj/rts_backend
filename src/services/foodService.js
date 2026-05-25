@@ -86,7 +86,8 @@ class FoodService {
 
   // ── Button 1: Cancel next week only (single-week FoodCancellation) ────────
   async cancelNextWeek(empId) {
-    const { getNowIST } = require("../utils/workingDays");
+    const { canCancelNow, getNowIST } = require("../utils/workingDays");
+    if (!canCancelNow()) throw new Error("Food changes are locked after Saturday 6:30 PM.");
     const nextMonday = getNextMonday(getNowIST());
     return prisma.foodCancellation.upsert({
       where:  { empId_weekStartDate: { empId, weekStartDate: nextMonday } },
@@ -96,7 +97,8 @@ class FoodService {
   }
 
   async undoCancelNextWeek(empId) {
-    const { getNowIST } = require("../utils/workingDays");
+    const { canCancelNow, getNowIST } = require("../utils/workingDays");
+    if (!canCancelNow()) throw new Error("Food changes are locked after Saturday 6:30 PM.");
     const nextMonday = getNextMonday(getNowIST());
     return prisma.foodCancellation.deleteMany({
       where: { empId, weekStartDate: nextMonday },
@@ -105,7 +107,8 @@ class FoodService {
 
   // ── Button 2: Cancel this year — suspend from next Monday onwards ─────────
   async bulkDisableFromNextWeek(empId) {
-    const { getNowIST } = require("../utils/workingDays");
+    const { canCancelNow, getNowIST } = require("../utils/workingDays");
+    if (!canCancelNow()) throw new Error("Food changes are locked after Saturday 6:30 PM.");
     const nextMonday = getNextMonday(getNowIST());
     return prisma.foodSubscription.update({
       where: { empId },
@@ -114,6 +117,8 @@ class FoodService {
   }
 
   async undoBulkDisable(empId) {
+    const { canCancelNow } = require("../utils/workingDays");
+    if (!canCancelNow()) throw new Error("Food changes are locked after Saturday 6:30 PM.");
     return prisma.foodSubscription.update({
       where: { empId },
       data:  { suspendedFrom: null },
@@ -122,7 +127,8 @@ class FoodService {
 
   // ── Button 3: Enable next week only (when year is suspended) ─────────────
   async enableNextWeekOnly(empId) {
-    const { getNowIST } = require("../utils/workingDays");
+    const { canCancelNow, getNowIST } = require("../utils/workingDays");
+    if (!canCancelNow()) throw new Error("Food changes are locked after Saturday 6:30 PM.");
     const nextMonday    = getNextMonday(getNowIST());
     const weekAfterNext = getNextNextWeekStart(getNowIST());
 
@@ -139,7 +145,8 @@ class FoodService {
 
   // Undo "enable next week only" — restore suspension back to next Monday
   async undoEnableNextWeek(empId) {
-    const { getNowIST } = require("../utils/workingDays");
+    const { canCancelNow, getNowIST } = require("../utils/workingDays");
+    if (!canCancelNow()) throw new Error("Food changes are locked after Saturday 6:30 PM.");
     const nextMonday = getNextMonday(getNowIST());
     await prisma.$transaction([
       prisma.foodSubscription.update({
@@ -154,6 +161,8 @@ class FoodService {
 
   // ── Button 4: Enable / disable entire year ────────────────────────────────
   async enableYear(empId) {
+    const { canCancelNow } = require("../utils/workingDays");
+    if (!canCancelNow()) throw new Error("Food changes are locked after Saturday 6:30 PM.");
     return prisma.foodSubscription.upsert({
       where:  { empId },
       update: { isActive: true, suspendedFrom: null },
@@ -162,6 +171,8 @@ class FoodService {
   }
 
   async disableYear(empId) {
+    const { canCancelNow } = require("../utils/workingDays");
+    if (!canCancelNow()) throw new Error("Food changes are locked after Saturday 6:30 PM.");
     return prisma.foodSubscription.upsert({
       where:  { empId },
       update: { isActive: false },
