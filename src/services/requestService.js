@@ -26,17 +26,37 @@ class RequestService {
   async getAll(user, query) {
     const { role, empId, dept: userDept } = user;
     const { page, limit, skip, take } = parsePagination(query);
-    const { status, search, name, dept, assignedDept, type, startDate, endDate, assignedStatus, priority } = query;
+    const { status, search, name, dept, assignedDept, type, startDate, endDate, assignedStatus, priority, sortOrder, unread, latest } = query;
+
+    // Parse comma-separated multi-value params
+    const parseMulti = (val) => val ? val.split(",").map(s => s.trim()).filter(Boolean) : [];
+    const assignedStatuses = parseMulti(assignedStatus);
+    const priorities       = parseMulti(priority);
+    const depts            = parseMulti(dept);
+    const assignedDepts    = parseMulti(assignedDept);
+    const names            = parseMulti(name);
+    const types            = parseMulti(type);
 
     let closureFilter = {};
     if (status === "open") closureFilter = { resolvedDate: null };
     if (status === "closed") closureFilter = { resolvedDate: { not: null } };
 
+    // Build a single-status Prisma condition
+    const buildStatusClause = (s) => {
+      if (s === "Open")                      return { assignedStatus: "Open" };
+      if (s === "Checking")                  return { assignedStatus: "Checking" };
+      if (s === "Pending Acknowledgement")   return { assignedStatus: "Pending Acknowledgement" };
+      if (s === "Closed")                    return { assignedStatus: { contains: "(Closed)" } };
+      return null;
+    };
+
     let assignedStatusFilter = {};
-    if (assignedStatus === "Open")                      assignedStatusFilter = { assignedStatus: "Open" };
-    else if (assignedStatus === "Checking")             assignedStatusFilter = { assignedStatus: "Checking" };
-    else if (assignedStatus === "Pending Acknowledgement") assignedStatusFilter = { assignedStatus: "Pending Acknowledgement" };
-    else if (assignedStatus === "Closed")               assignedStatusFilter = { assignedStatus: { contains: "(Closed)" } };
+    if (assignedStatuses.length === 1) {
+      assignedStatusFilter = buildStatusClause(assignedStatuses[0]) || {};
+    } else if (assignedStatuses.length > 1) {
+      const clauses = assignedStatuses.map(buildStatusClause).filter(Boolean);
+      if (clauses.length) assignedStatusFilter = { OR: clauses };
+    }
 
     let roleFilter = {};
     if (role === "SuperUser" || role === "Management" || role === "Admin") {
@@ -81,44 +101,74 @@ class RequestService {
     }
 
     const extraFilters = [];
-    if (name) extraFilters.push({ owner: { name: { contains: name, mode: "insensitive" } } });
-    if (dept) extraFilters.push({ dept });
-    if (assignedDept) extraFilters.push({ assignedDept });
 
-    if (priority) {
+    // Name (multi)
+    if (names.length === 1) {
+      extraFilters.push({ owner: { name: { contains: names[0], mode: "insensitive" } } });
+    } else if (names.length > 1) {
+      extraFilters.push({ OR: names.map(n => ({ owner: { name: { contains: n, mode: "insensitive" } } })) });
+    }
+
+    // Dept (multi)
+    if (depts.length === 1)      extraFilters.push({ dept: depts[0] });
+    else if (depts.length > 1)   extraFilters.push({ dept: { in: depts } });
+
+    // Assigned dept (multi)
+    if (assignedDepts.length === 1)    extraFilters.push({ assignedDept: assignedDepts[0] });
+    else if (assignedDepts.length > 1) extraFilters.push({ assignedDept: { in: assignedDepts } });
+
+    // Priority (multi — each maps to a date-range clause)
+    if (priorities.length > 0) {
       const now = new Date();
       const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
       const endOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
-      if (priority === "Overdue") {
-        extraFilters.push({ dueDate: { not: null, lt: today } });
-      } else if (priority === "High") {
-        const d7 = new Date(today); d7.setDate(d7.getDate() + 7);
-        extraFilters.push({ dueDate: { gte: today, lte: endOfDay(d7) } });
-      } else if (priority === "Medium") {
-        const d8  = new Date(today); d8.setDate(d8.getDate() + 8);
-        const d15 = new Date(today); d15.setDate(d15.getDate() + 15);
-        extraFilters.push({ dueDate: { gte: d8, lte: endOfDay(d15) } });
-      } else if (priority === "Low") {
-        const d16 = new Date(today); d16.setDate(d16.getDate() + 16);
-        const d30 = new Date(today); d30.setDate(d30.getDate() + 30);
-        extraFilters.push({ dueDate: { gte: d16, lte: endOfDay(d30) } });
-      }
+      const buildPriorityClause = (p) => {
+        if (p === "Overdue") return { dueDate: { not: null, lt: today } };
+        if (p === "High")    { const d7 = new Date(today); d7.setDate(d7.getDate() + 7);   return { dueDate: { gte: today, lte: endOfDay(d7) } }; }
+        if (p === "Medium")  { const d8 = new Date(today); d8.setDate(d8.getDate() + 8);  const d15 = new Date(today); d15.setDate(d15.getDate() + 15); return { dueDate: { gte: d8, lte: endOfDay(d15) } }; }
+        if (p === "Low")     { const d16 = new Date(today); d16.setDate(d16.getDate() + 16); const d30 = new Date(today); d30.setDate(d30.getDate() + 30); return { dueDate: { gte: d16, lte: endOfDay(d30) } }; }
+        return null;
+      };
+      const pClauses = priorities.map(buildPriorityClause).filter(Boolean);
+      if (pClauses.length === 1) extraFilters.push(pClauses[0]);
+      else if (pClauses.length > 1) extraFilters.push({ OR: pClauses });
     }
-    if (type === "sent") extraFilters.push({ empId });
-    else if (type === "received") extraFilters.push({ assignedDept: userDept, empId: { not: empId } });
+
+    // Type (multi — sent/received)
+    if (types.length > 0) {
+      const buildTypeClause = (t) => {
+        if (t === "sent")     return { empId };
+        if (t === "received") return { assignedDept: userDept, empId: { not: empId } };
+        return null;
+      };
+      const tClauses = types.map(buildTypeClause).filter(Boolean);
+      if (tClauses.length === 1) extraFilters.push(tClauses[0]);
+      else if (tClauses.length > 1) extraFilters.push({ OR: tClauses });
+    }
+
+    // Unread: tickets this user hasn't opened yet
+    if (unread === "true") extraFilters.push({ readReceipts: { none: { empId } } });
+
+    // Latest: tickets with any activity in the last 7 days
+    if (latest === "true") {
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      extraFilters.push({
+        OR: [
+          { createdAt:   { gte: sevenDaysAgo } },
+          { rmDate:      { gte: sevenDaysAgo } },
+          { hodDate:     { gte: sevenDaysAgo } },
+          { deptHodDate: { gte: sevenDaysAgo } },
+          { forwardedAt: { gte: sevenDaysAgo } },
+          { resolvedDate:{ gte: sevenDaysAgo } },
+        ],
+      });
+    }
 
     if (startDate || endDate) {
       const dateFilter = {};
-      if (startDate) {
-        const s = new Date(startDate);
-        s.setHours(0, 0, 0, 0);
-        dateFilter.gte = s;
-      }
-      if (endDate) {
-        const e = new Date(endDate);
-        e.setHours(23, 59, 59, 999);
-        dateFilter.lte = e;
-      }
+      if (startDate) { const s = new Date(startDate); s.setHours(0, 0, 0, 0); dateFilter.gte = s; }
+      if (endDate)   { const e = new Date(endDate);   e.setHours(23, 59, 59, 999); dateFilter.lte = e; }
       extraFilters.push({ createdAt: dateFilter });
     }
 
@@ -127,9 +177,9 @@ class RequestService {
       const term = search.trim();
       searchFilter = {
         OR: [
-          { purpose: { contains: term, mode: "insensitive" } },
+          { purpose:     { contains: term, mode: "insensitive" } },
           { description: { contains: term, mode: "insensitive" } },
-          { empId: { contains: term, mode: "insensitive" } },
+          { empId:       { contains: term, mode: "insensitive" } },
           { owner: { name: { contains: term, mode: "insensitive" } } },
         ],
       };
@@ -139,8 +189,10 @@ class RequestService {
     if (searchFilter.OR) andClauses.push(searchFilter);
     const where = { AND: andClauses.filter(f => Object.keys(f).length > 0) };
 
+    const order = sortOrder === "asc" ? "asc" : "desc";
+
     const [requests, total] = await Promise.all([
-      prisma.request.findMany({ where, include: WITH_OWNER, orderBy: { createdAt: "desc" }, skip, take }),
+      prisma.request.findMany({ where, include: WITH_OWNER, orderBy: { createdAt: order }, skip, take }),
       prisma.request.count({ where }),
     ]);
 
