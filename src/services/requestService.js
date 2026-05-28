@@ -330,6 +330,12 @@ class RequestService {
       const dateField = user.role === "RM" ? "rmDate" : user.role === "HOD" ? "hodDate" : "deptHodDate";
       updateData[field] = decision;
       updateData[dateField] = now;
+      if (decision === "Rejected") {
+        updateData.isClosed      = true;
+        updateData.resolvedDate  = now;
+        updateData.resolvedBy    = `${user.name} (${user.role})`;
+        updateData.assignedStatus = `Rejected (Closed)`;
+      }
       if (user.role === "DeptHOD" && decision === "Approved" && body.assignedPersonEmpId) {
         updateData.assignedPersonEmpId = body.assignedPersonEmpId;
         updateData.assignedPersonName  = body.assignedPersonName || null;
