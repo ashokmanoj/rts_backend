@@ -23,11 +23,15 @@ async function sendFcmToUser(empId, payload) {
             body:  payload.body,
           },
           data: {
-            url:        payload.url              || "/",
-            type:       payload.type             || "general",
-            tag:        payload.tag              || "",
-            action:     payload.data?.action     || "general",
-            channel_id: payload.data?.channel_id || "rts_notifications",
+            url:        payload.url                          || "/",
+            type:       payload.type                        || "general",
+            tag:        payload.tag                         || "",
+            action:     payload.data?.action                || "general",
+            channel_id: payload.data?.channel_id            || "rts_notifications",
+            requestId:  String(payload.data?.requestId      || ""),
+            deepLink:   payload.data?.requestId
+                          ? `${process.env.FRONTEND_URL || ""}/?openRequest=${payload.data.requestId}`
+                          : (process.env.FRONTEND_URL || "/"),
           },
           android: {
             notification: {

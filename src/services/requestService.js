@@ -531,9 +531,18 @@ class RequestService {
       updateData = { acknowledgement: "Received", acknowledgedAt: now, isClosed: true, assignedStatus: `${dateStr} (Closed)` };
       chatText = "✅ Requestor confirmed receipt — ticket is now officially closed.";
     } else {
-      // Not Received: reopen the ticket
-      updateData = { acknowledgement: null, acknowledgedAt: null, isClosed: false, assignedStatus: "Open", resolvedDate: null, resolvedBy: null };
-      chatText = "🔄 Requestor reported not received — ticket has been reopened.";
+      // Not Received: reopen the ticket and reset all approval fields
+      // (chat messages are kept — full history preserved)
+      updateData = {
+        acknowledgement: null, acknowledgedAt: null,
+        isClosed: false, assignedStatus: "Open",
+        resolvedDate: null, resolvedBy: null,
+        rmStatus: "--",  rmDate: null,
+        hodStatus: "--", hodDate: null,
+        deptHodStatus: "--", deptHodDate: null,
+        checkingBy: null, checkingDeadline: null, checkingReason: null,
+      };
+      chatText = "🔄 Requestor reported not received — ticket has been reopened. All approval statuses reset.";
       await prisma.closeTicket.deleteMany({ where: { requestId: reqId } });
     }
 
