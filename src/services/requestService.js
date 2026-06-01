@@ -62,7 +62,18 @@ class RequestService {
     if (role === "SuperUser" || role === "Management" || role === "Admin") {
       roleFilter = {};
     } else if (role === "DeptHOD") {
-      roleFilter = { OR: [{ empId }, { dept: userDept }, { assignedDept: userDept }, { assignedDepts: { contains: userDept } }] };
+      // DeptHOD sees:
+      //   1. Own requests
+      //   2. External incoming: other dept → their dept  (assignedDept = userDept, dept ≠ userDept)
+      //   3. Self-targeted: user targets their own dept  (dept = userDept AND assignedDept = userDept)
+      //   4. Forwarding chain
+      // Does NOT see: outgoing from their dept to other depts (dept = userDept, assignedDept ≠ userDept)
+      roleFilter = { OR: [
+        { empId },
+        { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }] },
+        { AND: [{ dept: userDept }, { assignedDept: userDept }] },
+        { assignedDepts: { contains: userDept } },
+      ] };
     } else if (role === "RM") {
       roleFilter = {
         OR: [
@@ -70,6 +81,8 @@ class RequestService {
           { AND: [{ owner: { rmEmpId: empId } }, { dept: userDept }] },
           { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }] },
           { assignedDepts: { contains: userDept } },
+          // Tracking: once RM acts (forwarded/approved), the request stays visible regardless of current dept
+          { AND: [{ owner: { rmEmpId: empId } }, { rmStatus: { not: "--" } }] },
         ],
       };
     } else if (role === "HOD") {
@@ -79,6 +92,8 @@ class RequestService {
           { AND: [{ owner: { hodEmpId: empId } }, { dept: userDept }] },
           { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }] },
           { assignedDepts: { contains: userDept } },
+          // Tracking: once HOD acts (forwarded/approved), the request stays visible regardless of current dept
+          { AND: [{ owner: { hodEmpId: empId } }, { hodStatus: { not: "--" } }] },
         ],
       };
     } else if (["Academic", "Animation", "Software"].includes(userDept)) {
@@ -90,12 +105,14 @@ class RequestService {
         ],
       };
     } else {
-      // Other regular staff: own requests + incoming to their dept + specifically assigned
+      // Other regular staff: own requests + incoming to their dept + specifically assigned + forwarding chain
       roleFilter = {
         OR: [
           { empId },
           { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }] },
           { assignedPersonEmpId: { contains: empId } },
+          // Tracking: requests forwarded from/through their dept remain visible
+          { assignedDepts: { contains: userDept } },
         ],
       };
     }
@@ -205,7 +222,18 @@ class RequestService {
     if (role === "SuperUser" || role === "Management" || role === "Admin") {
       roleFilter = {};
     } else if (role === "DeptHOD") {
-      roleFilter = { OR: [{ empId }, { dept: userDept }, { assignedDept: userDept }, { assignedDepts: { contains: userDept } }] };
+      // DeptHOD sees:
+      //   1. Own requests
+      //   2. External incoming: other dept → their dept  (assignedDept = userDept, dept ≠ userDept)
+      //   3. Self-targeted: user targets their own dept  (dept = userDept AND assignedDept = userDept)
+      //   4. Forwarding chain
+      // Does NOT see: outgoing from their dept to other depts (dept = userDept, assignedDept ≠ userDept)
+      roleFilter = { OR: [
+        { empId },
+        { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }] },
+        { AND: [{ dept: userDept }, { assignedDept: userDept }] },
+        { assignedDepts: { contains: userDept } },
+      ] };
     } else if (role === "RM") {
       roleFilter = {
         OR: [
@@ -213,6 +241,8 @@ class RequestService {
           { AND: [{ owner: { rmEmpId: empId } }, { dept: userDept }] },
           { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }] },
           { assignedDepts: { contains: userDept } },
+          // Tracking: once RM acts (forwarded/approved), the request stays visible regardless of current dept
+          { AND: [{ owner: { rmEmpId: empId } }, { rmStatus: { not: "--" } }] },
         ],
       };
     } else if (role === "HOD") {
@@ -222,6 +252,8 @@ class RequestService {
           { AND: [{ owner: { hodEmpId: empId } }, { dept: userDept }] },
           { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }] },
           { assignedDepts: { contains: userDept } },
+          // Tracking: once HOD acts (forwarded/approved), the request stays visible regardless of current dept
+          { AND: [{ owner: { hodEmpId: empId } }, { hodStatus: { not: "--" } }] },
         ],
       };
     } else if (["Academic", "Animation", "Software"].includes(userDept)) {
@@ -237,6 +269,7 @@ class RequestService {
           { empId },
           { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }] },
           { assignedPersonEmpId: { contains: empId } },
+          { assignedDepts: { contains: userDept } },
         ],
       };
     }
@@ -313,17 +346,22 @@ class RequestService {
 
     if (decision === "Forwarded") {
       if (!newDept) throw new Error("newDept is required when forwarding.");
-      updateData = { ...updateData, forwarded: true, forwardedBy: user.name, forwardedAt: now, assignedDept: newDept };
-      if (body.dualDept) {
-        const origDept = existing.assignedDept;
-        const existingDepts = existing.assignedDepts ? existing.assignedDepts.split(",").map(s => s.trim()).filter(Boolean) : [];
-        const allDepts = [...new Set([...existingDepts, origDept, newDept])];
-        updateData.assignedDepts = allDepts.join(",");
-        // DeptHOD forwarding via popup = they have also approved
-        if (user.role === "DeptHOD") {
-          updateData.deptHodStatus = "Approved";
-          updateData.deptHodDate   = now;
-        }
+      // Always store the full forwarding chain in assignedDepts so the history is never lost
+      const origDept      = existing.assignedDept;
+      const existingDepts = existing.assignedDepts ? existing.assignedDepts.split(",").map(s => s.trim()).filter(Boolean) : [];
+      const allDepts      = [...new Set([...existingDepts, origDept, newDept])];
+      updateData = {
+        ...updateData,
+        forwarded:     true,
+        forwardedBy:   user.name,
+        forwardedAt:   now,
+        assignedDept:  newDept,
+        assignedDepts: allDepts.join(","),   // preserved for all forward types
+      };
+      // DeptHOD dual-dept popup forward also auto-approves their step
+      if (body.dualDept && user.role === "DeptHOD") {
+        updateData.deptHodStatus = "Approved";
+        updateData.deptHodDate   = now;
       }
     } else if (["RM", "HOD", "DeptHOD", "Management"].includes(user.role)) {
       const field = user.role === "RM" ? "rmStatus" : user.role === "HOD" ? "hodStatus" : "deptHodStatus";
@@ -345,7 +383,10 @@ class RequestService {
       const isAssigned = existing.assignedPersonEmpId
         ? existing.assignedPersonEmpId.split(",").map(s => s.trim()).includes(user.empId)
         : false;
-      if (!((isTeamMember || isAssigned) && decision === "Checking")) throw new Error("Unauthorized approval.");
+      const canFacilitiesForward = isTeamMember && user.dept === "Facilities" && decision === "Forwarded";
+      if (!((isTeamMember || isAssigned) && decision === "Checking") && !canFacilitiesForward) {
+        throw new Error("Unauthorized approval.");
+      }
     }
 
     await prisma.requestRead.deleteMany({ where: { requestId: reqId, empId: { not: user.empId } } });

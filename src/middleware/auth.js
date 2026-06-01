@@ -136,7 +136,17 @@ async function authorizeRequestAccess(req, res, next) {
 
     // RM / HOD / DeptHOD: allow if dept matches, OR already acted, OR directly manages the owner
     if (["RM", "HOD", "DeptHOD"].includes(role)) {
-      if (userDept && (reqDept === userDept || reqAssigned === userDept || assignedDeptsArr.includes(userDept))) return next();
+      let deptMatch = false;
+      if (role === "DeptHOD") {
+        // External incoming OR self-targeted OR forwarding chain — NOT outgoing from their dept
+        deptMatch = userDept && (
+          (reqAssigned === userDept) ||                // external incoming + self-targeted
+          assignedDeptsArr.includes(userDept)          // forwarding chain
+        );
+      } else {
+        deptMatch = userDept && (reqDept === userDept || reqAssigned === userDept || assignedDeptsArr.includes(userDept));
+      }
+      if (deptMatch) return next();
       // Already acted — allow continued access even if request was forwarded away from their dept
       const hasActed =
         (role === "RM"      && rmStatus      && rmStatus      !== "--") ||
@@ -166,6 +176,9 @@ async function authorizeRequestAccess(req, res, next) {
     // Only non-restricted regular staff can see incoming requests assigned to their dept
     const deptOwnOnly = ["Academic", "Animation", "Software"];
     if (userDept && !deptOwnOnly.includes(userDept) && reqAssigned === userDept && reqDept !== userDept && !reqPersonIds) return next();
+
+    // Tracking: non-restricted staff can access requests where their dept is in the forwarding chain
+    if (userDept && !deptOwnOnly.includes(userDept) && assignedDeptsArr.includes(userDept)) return next();
 
     return res.status(403).json({ error: "Access denied to this request." });
   } catch (error) {

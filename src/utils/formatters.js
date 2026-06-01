@@ -49,10 +49,15 @@ function formatRequest(row, viewerEmpId) {
     deptHodDate:    pad(row.deptHodDate),
 
     // Forwarding
-    assignedDept:   row.assignedDept,
-    forwarded:      row.forwarded,
-    forwardedBy:    row.forwardedBy        ?? null,
-    forwardedAt:    pad(row.forwardedAt),
+    assignedDept:      row.assignedDept,
+    forwarded:         row.forwarded,
+    forwardedBy:       row.forwardedBy     ?? null,
+    forwardedAt:       pad(row.forwardedAt),
+    // The dept that forwarded = originalDept in the "Forwarded" chat message (previous assignedDept)
+    forwardedFromDept: (() => {
+      const msg = row.chatMessages?.find(m => m.status === "Forwarded" && m.originalDept);
+      return msg?.originalDept ?? null;
+    })(),
 
     // Assigned departments & person
     assignedDepts:       row.assignedDepts        ?? null,
