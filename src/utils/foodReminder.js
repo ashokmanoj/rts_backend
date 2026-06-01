@@ -5,15 +5,11 @@ const { sendPushToAllFoodSubscribers } = require("./pushService");
 
 const REMINDER_PAYLOAD = {
   title:              "🍱 Food Reminder",
-  body:               "Have you sorted next week's food? Tap 'Yes' if you're all set, or 'No' to update your preference now.",
+  body:               "Have you opted for next week's food yet? If not, please update your preference before saturday 6:30 PM.",
   icon:               "/icon-192.png",
   badge:              "/icon-192.png",
   tag:                "food-weekly-reminder",
   requireInteraction: true,
-  actions: [
-    { action: "yes", title: "Yes, I'm done ✓" },
-    { action: "no",  title: "No, take me there →" },
-  ],
   url:  "/?tab=food",
   data: { action: "food_reminder", channel_id: "food_reminder_channel" },
 };
@@ -21,15 +17,11 @@ const REMINDER_PAYLOAD = {
 // Saturday 4 PM IST — status check for next week
 const SAT_STATUS_PAYLOAD = {
   title:              "📋 Next Week Food Status",
-  body:               "Check your food status for next week — confirm or update your preference before the deadline!",
+  body:               "Check your food status for next week — confirm or update your preference before saturday 6:30 PM.",
   icon:               "/icon-192.png",
   badge:              "/icon-192.png",
   tag:                "food-sat-status",
   requireInteraction: true,
-  actions: [
-    { action: "yes", title: "View Status →" },
-    { action: "no",  title: "Update Now →" },
-  ],
   url:  "/?tab=food",
   data: { action: "food_reminder", channel_id: "food_reminder_channel" },
 };
@@ -60,4 +52,4 @@ function startFoodReminderCron() {
   console.log("✅ Food reminders scheduled — Mon / Wed at 5 PM IST | Sat at 4 PM & 5 PM IST");
 }
 
-module.exports = { startFoodReminderCron };
+module.exports = { startFoodReminderCron, REMINDER_PAYLOAD, SAT_STATUS_PAYLOAD };

@@ -28,7 +28,7 @@ async function sendFcmToUser(empId, payload) {
             tag:        payload.tag                         || "",
             action:     payload.data?.action                || "general",
             channel_id: payload.data?.channel_id            || "rts_notifications",
-            requestId:  String(payload.data?.requestId      || ""),
+            request_id: String(payload.data?.requestId      || ""),
             deepLink:   payload.data?.requestId
                           ? `${process.env.FRONTEND_URL || ""}/?openRequest=${payload.data.requestId}`
                           : (process.env.FRONTEND_URL || "/"),

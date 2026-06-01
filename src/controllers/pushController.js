@@ -3,21 +3,7 @@
 const prisma = require("../config/database");
 const { sendPushToUser, sendPushToAllFoodSubscribers } = require("../utils/pushService");
 const { sendFcmToUser } = require("../utils/fcmService");
-
-const REMINDER_PAYLOAD = {
-  title:              "🍱 Food Reminder",
-  body:               "Have you sorted next week's food? Tap 'Yes' if you're all set, or 'No' to update your preference now.",
-  icon:               "/icon-192.png",
-  badge:              "/icon-192.png",
-  tag:                "food-weekly-reminder",
-  requireInteraction: true,
-  actions: [
-    { action: "yes", title: "Yes, I'm done ✓" },
-    { action: "no",  title: "No, take me there →" },
-  ],
-  url:  "/?tab=food",
-  data: { action: "food_reminder", channel_id: "food_reminder_channel" },
-};
+const { REMINDER_PAYLOAD } = require("../utils/foodReminder");
 
 /** GET /api/push/vapid-public-key  — client needs this to subscribe */
 function getVapidKey(req, res) {
@@ -136,4 +122,55 @@ async function fcmUnregister(req, res, next) {
   }
 }
 
-module.exports = { getVapidKey, subscribe, unsubscribe, triggerReminder, fcmRegister, fcmUnregister, fcmTest };
+/**
+ * POST /api/push/broadcast
+ * Allowed: HR / Food Committee / RTS Help Desk DeptHOD + SuperUser + Management
+ * Body: { title, message, targetDept }
+ *   targetDept = "all"  → send to every active user
+ *   targetDept = "HR"   → send only to users in that dept
+ */
+async function broadcastNotification(req, res, next) {
+  try {
+    const { title, message, targetDepts } = req.body;
+    if (!title || !message) return res.status(400).json({ error: "title and message are required." });
+
+    const ALLOWED_DEPTS = ["HR", "Food Committee", "RTS Help Desk"];
+    const role = req.user.role;
+    const dept = req.user.dept;
+
+    const canBroadcast =
+      role === "SuperUser" ||
+      role === "Management" ||
+      (role === "DeptHOD" && ALLOWED_DEPTS.includes(dept));
+
+    if (!canBroadcast) return res.status(403).json({ error: "Not authorized to send broadcasts." });
+
+    // targetDepts: [] or null = all users, ['HR','Software'] = specific depts
+    const depts = Array.isArray(targetDepts) && targetDepts.length > 0 ? targetDepts : null;
+    let where = { isActive: true };
+    if (depts) where.dept = { in: depts };
+
+    const users = await prisma.user.findMany({ where, select: { empId: true } });
+    if (!users.length) return res.status(404).json({ error: "No users found for the selected departments." });
+
+    const payload = {
+      title:              title.trim(),
+      body:               message.trim(),
+      icon:               "/rtsLogo.png",
+      badge:              "/rtsLogo.png",
+      tag:                `broadcast-${Date.now()}`,
+      requireInteraction: false,
+      type:               "broadcast",
+      url:                "/",
+      data:               { action: "broadcast", channel_id: "rts_notifications" },
+    };
+
+    await Promise.allSettled(users.map(({ empId }) => sendPushToUser(empId, payload)));
+
+    res.json({ success: true, sentTo: users.length, targetDepts: depts || "all" });
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports = { getVapidKey, subscribe, unsubscribe, triggerReminder, fcmRegister, fcmUnregister, fcmTest, broadcastNotification };

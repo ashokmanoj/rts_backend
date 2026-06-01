@@ -26,37 +26,21 @@ class RequestService {
   async getAll(user, query) {
     const { role, empId, dept: userDept } = user;
     const { page, limit, skip, take } = parsePagination(query);
-    const { status, search, name, dept, assignedDept, type, startDate, endDate, assignedStatus, priority, sortOrder, unread, latest } = query;
+    const { status, search, name, dept, assignedDept, type, startDate, endDate, rmStatus: rmStatusParam, deptHodStatus: deptHodStatusParam, priority, sortOrder, unread, latest } = query;
 
     // Parse comma-separated multi-value params
     const parseMulti = (val) => val ? val.split(",").map(s => s.trim()).filter(Boolean) : [];
-    const assignedStatuses = parseMulti(assignedStatus);
-    const priorities       = parseMulti(priority);
-    const depts            = parseMulti(dept);
-    const assignedDepts    = parseMulti(assignedDept);
-    const names            = parseMulti(name);
-    const types            = parseMulti(type);
+    const rmStatuses      = parseMulti(rmStatusParam);
+    const deptHodStatuses = parseMulti(deptHodStatusParam);
+    const priorities      = parseMulti(priority);
+    const depts           = parseMulti(dept);
+    const assignedDepts   = parseMulti(assignedDept);
+    const names           = parseMulti(name);
+    const types           = parseMulti(type);
 
     let closureFilter = {};
     if (status === "open") closureFilter = { resolvedDate: null };
     if (status === "closed") closureFilter = { resolvedDate: { not: null } };
-
-    // Build a single-status Prisma condition
-    const buildStatusClause = (s) => {
-      if (s === "Open")                      return { assignedStatus: "Open" };
-      if (s === "Checking")                  return { assignedStatus: "Checking" };
-      if (s === "Pending Acknowledgement")   return { assignedStatus: "Pending Acknowledgement" };
-      if (s === "Closed")                    return { assignedStatus: { contains: "(Closed)" } };
-      return null;
-    };
-
-    let assignedStatusFilter = {};
-    if (assignedStatuses.length === 1) {
-      assignedStatusFilter = buildStatusClause(assignedStatuses[0]) || {};
-    } else if (assignedStatuses.length > 1) {
-      const clauses = assignedStatuses.map(buildStatusClause).filter(Boolean);
-      if (clauses.length) assignedStatusFilter = { OR: clauses };
-    }
 
     let roleFilter = {};
     if (role === "SuperUser" || role === "Management" || role === "Admin") {
@@ -78,22 +62,28 @@ class RequestService {
       roleFilter = {
         OR: [
           { empId },
+          // Own dept direct reports (outgoing requests)
           { AND: [{ owner: { rmEmpId: empId } }, { dept: userDept }] },
+          // Incoming from other depts (current assignedDept)
           { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }] },
-          { assignedDepts: { contains: userDept } },
-          // Tracking: once RM acts (forwarded/approved), the request stays visible regardless of current dept
-          { AND: [{ owner: { rmEmpId: empId } }, { rmStatus: { not: "--" } }] },
+          // Tracking — incoming forwarded away: all dept RMs can track (dept ≠ userDept)
+          { AND: [{ assignedDepts: { contains: userDept } }, { dept: { not: userDept } }] },
+          // Tracking — outgoing forwarded away: only the specific RM sees their direct report's request
+          { AND: [{ owner: { rmEmpId: empId } }, { assignedDepts: { contains: userDept } }] },
         ],
       };
     } else if (role === "HOD") {
       roleFilter = {
         OR: [
           { empId },
+          // Own dept direct reports (outgoing requests)
           { AND: [{ owner: { hodEmpId: empId } }, { dept: userDept }] },
+          // Incoming from other depts
           { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }] },
-          { assignedDepts: { contains: userDept } },
-          // Tracking: once HOD acts (forwarded/approved), the request stays visible regardless of current dept
-          { AND: [{ owner: { hodEmpId: empId } }, { hodStatus: { not: "--" } }] },
+          // Tracking — incoming forwarded away: all dept HODs can track
+          { AND: [{ assignedDepts: { contains: userDept } }, { dept: { not: userDept } }] },
+          // Tracking — outgoing forwarded away: only the specific HOD sees their direct report's request
+          { AND: [{ owner: { hodEmpId: empId } }, { assignedDepts: { contains: userDept } }] },
         ],
       };
     } else if (["Academic", "Animation", "Software"].includes(userDept)) {
@@ -133,6 +123,17 @@ class RequestService {
     // Assigned dept (multi)
     if (assignedDepts.length === 1)    extraFilters.push({ assignedDept: assignedDepts[0] });
     else if (assignedDepts.length > 1) extraFilters.push({ assignedDept: { in: assignedDepts } });
+
+    // Requestor Dept Status — show requests where RM or HOD has the selected status
+    if (rmStatuses.length === 1) {
+      extraFilters.push({ OR: [{ rmStatus: rmStatuses[0] }, { hodStatus: rmStatuses[0] }] });
+    } else if (rmStatuses.length > 1) {
+      extraFilters.push({ OR: [{ rmStatus: { in: rmStatuses } }, { hodStatus: { in: rmStatuses } }] });
+    }
+
+    // Assigned Dept Status — filters by deptHodStatus (DeptHOD approval from assigned dept)
+    if (deptHodStatuses.length === 1)      extraFilters.push({ deptHodStatus: deptHodStatuses[0] });
+    else if (deptHodStatuses.length > 1)   extraFilters.push({ deptHodStatus: { in: deptHodStatuses } });
 
     // Priority (multi — each maps to a date-range clause)
     if (priorities.length > 0) {
@@ -202,7 +203,7 @@ class RequestService {
       };
     }
 
-    const andClauses = [roleFilter, closureFilter, assignedStatusFilter, ...extraFilters];
+    const andClauses = [roleFilter, closureFilter, ...extraFilters];
     if (searchFilter.OR) andClauses.push(searchFilter);
     const where = { AND: andClauses.filter(f => Object.keys(f).length > 0) };
 
@@ -240,9 +241,8 @@ class RequestService {
           { empId },
           { AND: [{ owner: { rmEmpId: empId } }, { dept: userDept }] },
           { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }] },
-          { assignedDepts: { contains: userDept } },
-          // Tracking: once RM acts (forwarded/approved), the request stays visible regardless of current dept
-          { AND: [{ owner: { rmEmpId: empId } }, { rmStatus: { not: "--" } }] },
+          { AND: [{ assignedDepts: { contains: userDept } }, { dept: { not: userDept } }] },
+          { AND: [{ owner: { rmEmpId: empId } }, { assignedDepts: { contains: userDept } }] },
         ],
       };
     } else if (role === "HOD") {
@@ -251,9 +251,8 @@ class RequestService {
           { empId },
           { AND: [{ owner: { hodEmpId: empId } }, { dept: userDept }] },
           { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }] },
-          { assignedDepts: { contains: userDept } },
-          // Tracking: once HOD acts (forwarded/approved), the request stays visible regardless of current dept
-          { AND: [{ owner: { hodEmpId: empId } }, { hodStatus: { not: "--" } }] },
+          { AND: [{ assignedDepts: { contains: userDept } }, { dept: { not: userDept } }] },
+          { AND: [{ owner: { hodEmpId: empId } }, { assignedDepts: { contains: userDept } }] },
         ],
       };
     } else if (["Academic", "Animation", "Software"].includes(userDept)) {
@@ -357,8 +356,15 @@ class RequestService {
         forwardedAt:   now,
         assignedDept:  newDept,
         assignedDepts: allDepts.join(","),   // preserved for all forward types
+        // Reset approval statuses so the new dept gets a fresh set of action buttons.
+        // Previous approvals are preserved in chat history.
+        rmStatus:         "--",  rmDate:      null,
+        hodStatus:        "--",  hodDate:      null,
+        deptHodStatus:    "--",  deptHodDate:  null,
+        checkingBy:       null,  checkingDeadline: null, checkingReason: null,
+        assignedStatus:   "Open",
       };
-      // DeptHOD dual-dept popup forward also auto-approves their step
+      // DeptHOD dual-dept popup forward also auto-approves their stepGumbi@123456
       if (body.dualDept && user.role === "DeptHOD") {
         updateData.deptHodStatus = "Approved";
         updateData.deptHodDate   = now;
