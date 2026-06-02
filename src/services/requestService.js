@@ -129,14 +129,15 @@ class RequestService {
       extraFilters.push({ isClosed: false });
     }
 
-    // Requestor Dept Status — "Open" (--) means BOTH rm and hod haven't acted; others = either rm or hod matches
+    // Requestor Dept Status — "Open" (--) means BOTH rm and hod haven't acted;
+    // "ack_pending" = Pending Acknowledgement; others = either rm or hod matches
     if (rmStatuses.length > 0) {
-      const hasOpen   = rmStatuses.includes("--");
-      const others    = rmStatuses.filter(s => s !== "--");
-      const clauses   = [];
-      // "Open" = both RM and HOD are still pending (no action taken by either)
+      const hasOpen       = rmStatuses.includes("--");
+      const hasAckPending = rmStatuses.includes("ack_pending");
+      const others        = rmStatuses.filter(s => s !== "--" && s !== "ack_pending");
+      const clauses       = [];
       if (hasOpen)          clauses.push({ AND: [{ rmStatus: "--" }, { hodStatus: "--" }] });
-      // Other statuses = RM or HOD has that status
+      if (hasAckPending)    clauses.push({ assignedStatus: "Pending Acknowledgement" });
       if (others.length === 1)  clauses.push({ OR: [{ rmStatus: others[0] }, { hodStatus: others[0] }] });
       if (others.length  > 1)  clauses.push({ OR: [{ rmStatus: { in: others } }, { hodStatus: { in: others } }] });
       extraFilters.push(clauses.length === 1 ? clauses[0] : { OR: clauses });
