@@ -153,16 +153,17 @@ async function broadcastNotification(req, res, next) {
     const users = await prisma.user.findMany({ where, select: { empId: true } });
     if (!users.length) return res.status(404).json({ error: "No users found for the selected departments." });
 
+    const senderDept = dept || req.user.name || "Admin";
     const payload = {
       title:              title.trim(),
-      body:               message.trim(),
+      body:               `${message.trim()}\n \nRegards,\n${senderDept} Department`,
       icon:               "/rtsLogo.png",
       badge:              "/rtsLogo.png",
       tag:                `broadcast-${Date.now()}`,
       requireInteraction: false,
       type:               "broadcast",
       url:                "/",
-      data:               { action: "broadcast", channel_id: "rts_notifications" },
+      data:               { action: "broadcast", channel_id: "rts_notifications", senderDept },
     };
 
     await Promise.allSettled(users.map(({ empId }) => sendPushToUser(empId, payload)));

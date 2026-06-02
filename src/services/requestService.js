@@ -124,16 +124,37 @@ class RequestService {
     if (assignedDepts.length === 1)    extraFilters.push({ assignedDept: assignedDepts[0] });
     else if (assignedDepts.length > 1) extraFilters.push({ assignedDept: { in: assignedDepts } });
 
-    // Requestor Dept Status — show requests where RM or HOD has the selected status
-    if (rmStatuses.length === 1) {
-      extraFilters.push({ OR: [{ rmStatus: rmStatuses[0] }, { hodStatus: rmStatuses[0] }] });
-    } else if (rmStatuses.length > 1) {
-      extraFilters.push({ OR: [{ rmStatus: { in: rmStatuses } }, { hodStatus: { in: rmStatuses } }] });
+    // When either status filter is active, automatically exclude closed tickets
+    if (rmStatuses.length > 0 || deptHodStatuses.length > 0) {
+      extraFilters.push({ isClosed: false });
     }
 
-    // Assigned Dept Status — filters by deptHodStatus (DeptHOD approval from assigned dept)
-    if (deptHodStatuses.length === 1)      extraFilters.push({ deptHodStatus: deptHodStatuses[0] });
-    else if (deptHodStatuses.length > 1)   extraFilters.push({ deptHodStatus: { in: deptHodStatuses } });
+    // Requestor Dept Status — "Open" (--) means BOTH rm and hod haven't acted; others = either rm or hod matches
+    if (rmStatuses.length > 0) {
+      const hasOpen   = rmStatuses.includes("--");
+      const others    = rmStatuses.filter(s => s !== "--");
+      const clauses   = [];
+      // "Open" = both RM and HOD are still pending (no action taken by either)
+      if (hasOpen)          clauses.push({ AND: [{ rmStatus: "--" }, { hodStatus: "--" }] });
+      // Other statuses = RM or HOD has that status
+      if (others.length === 1)  clauses.push({ OR: [{ rmStatus: others[0] }, { hodStatus: others[0] }] });
+      if (others.length  > 1)  clauses.push({ OR: [{ rmStatus: { in: others } }, { hodStatus: { in: others } }] });
+      extraFilters.push(clauses.length === 1 ? clauses[0] : { OR: clauses });
+    }
+
+    // Assigned Dept Status — "Open" (--) means ALL three assigned-dept fields haven't acted;
+    // other statuses = ANY of the three assigned-dept fields matches
+    if (deptHodStatuses.length > 0) {
+      const hasOpen = deptHodStatuses.includes("--");
+      const others  = deptHodStatuses.filter(s => s !== "--");
+      const clauses = [];
+      // "Open" = assigned RM, assigned HOD AND DeptHOD are all still pending
+      if (hasOpen) clauses.push({ AND: [{ assignedRmStatus: "--" }, { assignedHodStatus: "--" }, { deptHodStatus: "--" }] });
+      // Other statuses = any of the three assigned-dept fields has that status
+      if (others.length === 1) clauses.push({ OR: [{ assignedRmStatus: others[0] }, { assignedHodStatus: others[0] }, { deptHodStatus: others[0] }] });
+      if (others.length  > 1) clauses.push({ OR: [{ assignedRmStatus: { in: others } }, { assignedHodStatus: { in: others } }, { deptHodStatus: { in: others } }] });
+      extraFilters.push(clauses.length === 1 ? clauses[0] : { OR: clauses });
+    }
 
     // Priority (multi — each maps to a date-range clause)
     if (priorities.length > 0) {
@@ -358,11 +379,13 @@ class RequestService {
         assignedDepts: allDepts.join(","),   // preserved for all forward types
         // Reset approval statuses so the new dept gets a fresh set of action buttons.
         // Previous approvals are preserved in chat history.
-        rmStatus:         "--",  rmDate:      null,
-        hodStatus:        "--",  hodDate:      null,
-        deptHodStatus:    "--",  deptHodDate:  null,
-        checkingBy:       null,  checkingDeadline: null, checkingReason: null,
-        assignedStatus:   "Open",
+        rmStatus:           "--",  rmDate:          null,
+        hodStatus:          "--",  hodDate:          null,
+        deptHodStatus:      "--",  deptHodDate:      null,
+        assignedRmStatus:   "--",  assignedRmDate:   null,
+        assignedHodStatus:  "--",  assignedHodDate:  null,
+        checkingBy:         null,  checkingDeadline: null, checkingReason: null,
+        assignedStatus:     "Open",
       };
       // DeptHOD dual-dept popup forward also auto-approves their stepGumbi@123456
       if (body.dualDept && user.role === "DeptHOD") {
@@ -370,8 +393,23 @@ class RequestService {
         updateData.deptHodDate   = now;
       }
     } else if (["RM", "HOD", "DeptHOD", "Management"].includes(user.role)) {
-      const field = user.role === "RM" ? "rmStatus" : user.role === "HOD" ? "hodStatus" : "deptHodStatus";
-      const dateField = user.role === "RM" ? "rmDate" : user.role === "HOD" ? "hodDate" : "deptHodDate";
+      // If RM/HOD is from the ASSIGNED dept (not requestor's dept) → use assigned fields
+      const isAssignedDeptUser =
+        (user.role === "RM" || user.role === "HOD") &&
+        user.dept === existing.assignedDept &&
+        user.dept !== existing.dept;
+
+      let field, dateField;
+      if (user.role === "RM") {
+        field     = isAssignedDeptUser ? "assignedRmStatus"  : "rmStatus";
+        dateField = isAssignedDeptUser ? "assignedRmDate"    : "rmDate";
+      } else if (user.role === "HOD") {
+        field     = isAssignedDeptUser ? "assignedHodStatus" : "hodStatus";
+        dateField = isAssignedDeptUser ? "assignedHodDate"   : "hodDate";
+      } else {
+        field     = "deptHodStatus";
+        dateField = "deptHodDate";
+      }
       updateData[field] = decision;
       updateData[dateField] = now;
       if (decision === "Rejected") {
@@ -560,8 +598,11 @@ class RequestService {
 
   async acknowledge(reqId, user, body) {
     const { status } = body;
-    if (!["Received", "Not Received"].includes(status))
-      throw new Error("status must be 'Received' or 'Not Received'.");
+    // Accept both old and new label names for backwards compatibility
+    const normalizedStatus =
+      status === "Resolved" || status === "Received"         ? "Resolved"     :
+      status === "Not Resolved" || status === "Not Received" ? "Not Resolved" : null;
+    if (!normalizedStatus) throw new Error("status must be 'Resolved' or 'Not Resolved'.");
 
     const existing = await prisma.request.findUnique({ where: { id: reqId } });
     if (!existing) throw new Error("Request not found.");
@@ -573,20 +614,22 @@ class RequestService {
     let updateData;
     let chatText;
 
-    if (status === "Received") {
+    if (normalizedStatus === "Resolved") {
       const dateStr = now.toLocaleDateString("en-IN");
-      updateData = { acknowledgement: "Received", acknowledgedAt: now, isClosed: true, assignedStatus: `${dateStr} (Closed)` };
-      chatText = "✅ Requestor confirmed receipt — ticket is now officially closed.";
+      updateData = { acknowledgement: "Resolved", acknowledgedAt: now, isClosed: true, assignedStatus: `${dateStr} (Closed)` };
+      chatText = "✅ Requestor confirmed — ticket is now officially resolved and closed.";
     } else {
-      // Not Received: reopen the ticket and reset all approval fields
+      // Not Resolved: reopen the ticket and reset all approval fields
       // (chat messages are kept — full history preserved)
       updateData = {
         acknowledgement: null, acknowledgedAt: null,
         isClosed: false, assignedStatus: "Open",
         resolvedDate: null, resolvedBy: null,
-        rmStatus: "--",  rmDate: null,
-        hodStatus: "--", hodDate: null,
-        deptHodStatus: "--", deptHodDate: null,
+        rmStatus: "--",           rmDate: null,
+        hodStatus: "--",          hodDate: null,
+        deptHodStatus: "--",      deptHodDate: null,
+        assignedRmStatus: "--",   assignedRmDate: null,
+        assignedHodStatus: "--",  assignedHodDate: null,
         checkingBy: null, checkingDeadline: null, checkingReason: null,
       };
       chatText = "🔄 Requestor reported not received — ticket has been reopened. All approval statuses reset.";

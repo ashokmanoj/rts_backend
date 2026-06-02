@@ -40,11 +40,16 @@ function formatRequest(row, viewerEmpId) {
 
     requestorRole:  row.requestorRole  ?? null,
 
-    // Approval statuses
+    // Requestor dept approval statuses
     rmStatus:       row.rmStatus,
     rmDate:         pad(row.rmDate),
     hodStatus:      row.hodStatus,
     hodDate:        pad(row.hodDate),
+    // Assigned dept approval statuses
+    assignedRmStatus:  row.assignedRmStatus,
+    assignedRmDate:    pad(row.assignedRmDate),
+    assignedHodStatus: row.assignedHodStatus,
+    assignedHodDate:   pad(row.assignedHodDate),
     deptHodStatus:  row.deptHodStatus,
     deptHodDate:    pad(row.deptHodDate),
 

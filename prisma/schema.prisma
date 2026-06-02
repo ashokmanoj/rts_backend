@@ -116,6 +116,13 @@ model Request {
   hodDate        DateTime? @map("hod_date")
   deptHodStatus  String    @default("--") @map("dept_hod_status")
   deptHodDate    DateTime? @map("dept_hod_date")
+
+  // Assigned dept RM/HOD approval (separate from requestor's dept RM/HOD)
+  assignedRmStatus  String    @default("--") @map("assigned_rm_status")
+  assignedRmDate    DateTime? @map("assigned_rm_date")
+  assignedHodStatus String    @default("--") @map("assigned_hod_status")
+  assignedHodDate   DateTime? @map("assigned_hod_date")
+
   forwarded      Boolean   @default(false)
   forwardedBy    String?   @map("forwarded_by")
   forwardedAt    DateTime? @map("forwarded_at")
