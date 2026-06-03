@@ -378,10 +378,8 @@ class RequestService {
         forwardedAt:   now,
         assignedDept:  newDept,
         assignedDepts: allDepts.join(","),   // preserved for all forward types
-        // Reset approval statuses so the new dept gets a fresh set of action buttons.
-        // Previous approvals are preserved in chat history.
-        rmStatus:           "--",  rmDate:          null,
-        hodStatus:          "--",  hodDate:          null,
+        // Preserve rmStatus/hodStatus (requestor's dept approvals — shown in RM/HOD columns).
+        // Only reset assigned-dept fields so the receiving dept gets fresh action buttons.
         deptHodStatus:      "--",  deptHodDate:      null,
         assignedRmStatus:   "--",  assignedRmDate:   null,
         assignedHodStatus:  "--",  assignedHodDate:  null,
