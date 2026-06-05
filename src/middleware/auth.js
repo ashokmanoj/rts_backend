@@ -174,11 +174,12 @@ async function authorizeRequestAccess(req, res, next) {
     }
 
     // Only non-restricted regular staff can see incoming requests assigned to their dept
-    const deptOwnOnly = ["Academic", "Animation", "Software"];
-    if (userDept && !deptOwnOnly.includes(userDept) && reqAssigned === userDept && reqDept !== userDept && !reqPersonIds) return next();
+    const deptOwnOnly = ["Academics", "Animation", "Software"];
+    const isOwnOnly = (dept) => deptOwnOnly.some(p => dept?.startsWith(p));
+    if (userDept && !isOwnOnly(userDept) && reqAssigned === userDept && reqDept !== userDept && !reqPersonIds) return next();
 
     // Tracking: non-restricted staff can access requests where their dept is in the forwarding chain
-    if (userDept && !deptOwnOnly.includes(userDept) && assignedDeptsArr.includes(userDept)) return next();
+    if (userDept && !isOwnOnly(userDept) && assignedDeptsArr.includes(userDept)) return next();
 
     return res.status(403).json({ error: "Access denied to this request." });
   } catch (error) {
