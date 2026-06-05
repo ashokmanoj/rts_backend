@@ -153,6 +153,61 @@ class AdminService {
     await prisma.user.update({ where: { empId }, data: { passwordHash: hash } });
     return { success: true };
   }
+
+  // ── User Roles CRUD ──────────────────────────────────────────────────────────
+
+  async getUserRoles({ search, role, dept } = {}) {
+    const where = {};
+    if (role) where.role = role;
+    if (dept) where.dept = dept;
+    if (search) {
+      where.OR = [
+        { empId: { contains: search, mode: "insensitive" } },
+        { user: { name: { contains: search, mode: "insensitive" } } },
+      ];
+    }
+    const rows = await prisma.userRole.findMany({
+      where,
+      include: { user: { select: { name: true } } },
+      orderBy: [{ empId: "asc" }, { role: "asc" }, { dept: "asc" }],
+    });
+    return rows.map(r => ({
+      id:    r.id,
+      empId: r.empId,
+      name:  r.user?.name || "",
+      role:  r.role,
+      dept:  r.dept,
+    }));
+  }
+
+  async addUserRole(empId, role, dept) {
+    const user = await prisma.user.findUnique({ where: { empId } });
+    if (!user) throw Object.assign(new Error(`User ${empId} not found.`), { status: 404 });
+    try {
+      return await prisma.userRole.create({ data: { empId, role, dept } });
+    } catch (e) {
+      if (e.code === "P2002") throw Object.assign(new Error("This role/dept combination already exists for this user."), { status: 400 });
+      throw e;
+    }
+  }
+
+  async updateUserRole(id, role, dept) {
+    const existing = await prisma.userRole.findUnique({ where: { id } });
+    if (!existing) throw Object.assign(new Error("Role entry not found."), { status: 404 });
+    try {
+      return await prisma.userRole.update({ where: { id }, data: { role, dept } });
+    } catch (e) {
+      if (e.code === "P2002") throw Object.assign(new Error("This role/dept combination already exists for this user."), { status: 400 });
+      throw e;
+    }
+  }
+
+  async deleteUserRole(id) {
+    const existing = await prisma.userRole.findUnique({ where: { id } });
+    if (!existing) throw Object.assign(new Error("Role entry not found."), { status: 404 });
+    await prisma.userRole.delete({ where: { id } });
+    return { success: true };
+  }
 }
 
 module.exports = new AdminService();

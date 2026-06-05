@@ -94,4 +94,53 @@ async function resetPassword(req, res, next) {
   }
 }
 
-module.exports = { getUserLogReport, createUser, bulkCreateUsers, toggleUserStatus, getDeptTrackingReport, updateUser, resetPassword };
+async function getUserRoles(req, res, next) {
+  try {
+    if (req.user.role !== "SuperUser") return res.status(403).json({ error: "Access denied." });
+    const data = await adminService.getUserRoles(req.query);
+    res.json(data);
+  } catch (err) { next(err); }
+}
+
+async function addUserRole(req, res, next) {
+  try {
+    if (req.user.role !== "SuperUser") return res.status(403).json({ error: "Access denied." });
+    const { empId, role, dept } = req.body;
+    if (!empId || !role || !dept) return res.status(400).json({ error: "empId, role and dept are required." });
+    const entry = await adminService.addUserRole(empId, role, dept);
+    res.status(201).json(entry);
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.message });
+    next(err);
+  }
+}
+
+async function updateUserRole(req, res, next) {
+  try {
+    if (req.user.role !== "SuperUser") return res.status(403).json({ error: "Access denied." });
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ error: "Invalid id." });
+    const { role, dept } = req.body;
+    if (!role || !dept) return res.status(400).json({ error: "role and dept are required." });
+    const entry = await adminService.updateUserRole(id, role, dept);
+    res.json(entry);
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.message });
+    next(err);
+  }
+}
+
+async function deleteUserRole(req, res, next) {
+  try {
+    if (req.user.role !== "SuperUser") return res.status(403).json({ error: "Access denied." });
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ error: "Invalid id." });
+    await adminService.deleteUserRole(id);
+    res.json({ success: true });
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.message });
+    next(err);
+  }
+}
+
+module.exports = { getUserLogReport, createUser, bulkCreateUsers, toggleUserStatus, getDeptTrackingReport, updateUser, resetPassword, getUserRoles, addUserRole, updateUserRole, deleteUserRole };
