@@ -43,7 +43,7 @@ class RequestService {
     if (status === "closed") closureFilter = { resolvedDate: { not: null } };
 
     let roleFilter = {};
-    if (role === "SuperUser" || role === "Management" || role === "Admin") {
+    if (role === "SuperUser" || role === "Management" || role === "Admin" || (role === "Requestor" && userDept?.startsWith("Management"))) {
       roleFilter = {};
     } else if (role === "DeptHOD") {
       // DeptHOD sees:
@@ -86,7 +86,7 @@ class RequestService {
           { AND: [{ owner: { hodEmpId: empId } }, { assignedDepts: { contains: userDept } }] },
         ],
       };
-    } else if (["Academics","Management","Animation", "Software"].some(p => userDept?.startsWith(p))) {
+    } else if (["Academics","Animation", "Software"].some(p => userDept?.startsWith(p))) {
       // These depts: only own requests + specifically assigned (no dept-wide visibility)
       roleFilter = {
         OR: [
@@ -242,7 +242,7 @@ class RequestService {
   async getFilterOptions(user) {
     const { role, empId, dept: userDept } = user;
     let roleFilter = {};
-    if (role === "SuperUser" || role === "Management" || role === "Admin") {
+    if (role === "SuperUser" || role === "Management" || role === "Admin" || (role === "Requestor" && userDept?.startsWith("Management"))) {
       roleFilter = {};
     } else if (role === "DeptHOD") {
       // DeptHOD sees:
@@ -277,7 +277,7 @@ class RequestService {
           { AND: [{ owner: { hodEmpId: empId } }, { assignedDepts: { contains: userDept } }] },
         ],
       };
-    } else if (["Academics", "Management", "Animation", "Software"].some(p => userDept?.startsWith(p))) {
+    } else if (["Academics", "Animation", "Software"].some(p => userDept?.startsWith(p))) {
       roleFilter = {
         OR: [
           { empId },
@@ -498,7 +498,9 @@ class RequestService {
     if (!existing) throw new Error("Request not found.");
     if (existing.isClosed || existing.assignedStatus === "Pending Acknowledgement") throw new Error("Ticket already closed.");
 
-    const canClose = ["DeptHOD", "Management"].includes(user.role) || (existing.assignedDept === user.dept && existing.dept !== user.dept);
+    const canClose = ["DeptHOD", "Management"].includes(user.role) ||
+      (existing.assignedDept === user.dept && existing.dept !== user.dept) ||
+      (user.role === "Requestor" && user.dept === "Facilities" && existing.dept === "Facilities" && existing.assignedDept !== "Facilities");
     if (!canClose) throw new Error("Not authorized to close.");
 
     const now = new Date();
