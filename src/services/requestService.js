@@ -86,7 +86,7 @@ class RequestService {
           { AND: [{ owner: { hodEmpId: empId } }, { assignedDepts: { contains: userDept } }] },
         ],
       };
-    } else if (["Academics", "Animation", "Software"].some(p => userDept?.startsWith(p))) {
+    } else if (["Academics","Management","Animation", "Software"].some(p => userDept?.startsWith(p))) {
       // These depts: only own requests + specifically assigned (no dept-wide visibility)
       roleFilter = {
         OR: [
@@ -277,7 +277,7 @@ class RequestService {
           { AND: [{ owner: { hodEmpId: empId } }, { assignedDepts: { contains: userDept } }] },
         ],
       };
-    } else if (["Academics", "Animation", "Software"].some(p => userDept?.startsWith(p))) {
+    } else if (["Academics", "Management", "Animation", "Software"].some(p => userDept?.startsWith(p))) {
       roleFilter = {
         OR: [
           { empId },

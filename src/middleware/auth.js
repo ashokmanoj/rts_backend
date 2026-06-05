@@ -174,7 +174,7 @@ async function authorizeRequestAccess(req, res, next) {
     }
 
     // Only non-restricted regular staff can see incoming requests assigned to their dept
-    const deptOwnOnly = ["Academics", "Animation", "Software"];
+    const deptOwnOnly = ["Academics", "Management", "Animation", "Software"];
     const isOwnOnly = (dept) => deptOwnOnly.some(p => dept?.startsWith(p));
     if (userDept && !isOwnOnly(userDept) && reqAssigned === userDept && reqDept !== userDept && !reqPersonIds) return next();
 
