@@ -15,8 +15,11 @@ router.get("/", ctrl.getAll);
 // GET unique filter options
 router.get("/filters", ctrl.getFilterOptions);
 
-// GET employees by dept(s) — used when creating a request
+// GET employees by dept(s) — used when creating a request / forward
 router.get("/users-by-dept", ctrl.getUsersByDept);
+
+// GET all active departments list
+router.get("/departments", ctrl.getDepartments);
 
 // ── Management Portal: HOD-pending requests & HOD-level approval ──────────
 router.get("/hod-pending", authorize("Management"), ctrl.getHodPending);

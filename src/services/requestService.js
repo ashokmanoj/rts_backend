@@ -652,11 +652,29 @@ class RequestService {
 
   async getUsersByDept(depts) {
     const deptList = Array.isArray(depts) ? depts : [depts];
-    return prisma.user.findMany({
+    const users = await prisma.user.findMany({
       where:   { dept: { in: deptList }, isActive: true },
-      select:  { empId: true, name: true, dept: true, designation: true, role: true },
+      select:  { empId: true, name: true, dept: true, designation: true, role: true, userRoles: { select: { role: true, dept: true } } },
       orderBy: { name: "asc" },
     });
+    return users.map(u => ({
+      empId:       u.empId,
+      name:        u.name,
+      dept:        u.dept,
+      designation: u.designation,
+      role:        u.role,
+      roles:       u.userRoles.map(r => ({ role: r.role, dept: r.dept })),
+    }));
+  }
+
+  async getDepartments() {
+    const users = await prisma.user.findMany({
+      where:   { isActive: true },
+      select:  { dept: true },
+      distinct: ["dept"],
+      orderBy: { dept: "asc" },
+    });
+    return users.map(u => u.dept).filter(Boolean).sort();
   }
 
   async markSeen(requestId, empId) {

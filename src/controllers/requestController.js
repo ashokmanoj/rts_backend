@@ -139,6 +139,15 @@ async function getUsersByDept(req, res, next) {
   }
 }
 
+async function getDepartments(req, res, next) {
+  try {
+    const depts = await requestService.getDepartments();
+    res.json({ departments: depts });
+  } catch (err) {
+    next(err);
+  }
+}
+
 async function deleteRequest(req, res, next) {
   try {
     const reqId = Number(req.params.id);
@@ -159,4 +168,4 @@ async function editRequest(req, res, next) {
   }
 }
 
-module.exports = { getAll, getById, getFilterOptions, create, approval, markSeen, markUnread, close, getHodPending, hodApproval, acknowledge, getUsersByDept, deleteRequest, editRequest };
+module.exports = { getAll, getById, getFilterOptions, create, approval, markSeen, markUnread, close, getHodPending, hodApproval, acknowledge, getUsersByDept, getDepartments, deleteRequest, editRequest };
