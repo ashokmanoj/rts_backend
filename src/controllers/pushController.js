@@ -131,7 +131,7 @@ async function fcmUnregister(req, res, next) {
  */
 async function broadcastNotification(req, res, next) {
   try {
-    const { title, message, targetDepts } = req.body;
+    const { title, message, targetDepts, targetLocations } = req.body;
     if (!title || !message) return res.status(400).json({ error: "title and message are required." });
 
     const ALLOWED_DEPTS = ["HR", "Food Committee", "RTS Help Desk"];
@@ -145,13 +145,15 @@ async function broadcastNotification(req, res, next) {
 
     if (!canBroadcast) return res.status(403).json({ error: "Not authorized to send broadcasts." });
 
-    // targetDepts: [] or null = all users, ['HR','Software'] = specific depts
-    const depts = Array.isArray(targetDepts) && targetDepts.length > 0 ? targetDepts : null;
+    const depts     = Array.isArray(targetDepts)     && targetDepts.length     > 0 ? targetDepts     : null;
+    const locations = Array.isArray(targetLocations) && targetLocations.length > 0 ? targetLocations : null;
+
     let where = { isActive: true };
-    if (depts) where.dept = { in: depts };
+    if (depts)     where.dept     = { in: depts };
+    if (locations) where.location = { in: locations };
 
     const users = await prisma.user.findMany({ where, select: { empId: true } });
-    if (!users.length) return res.status(404).json({ error: "No users found for the selected departments." });
+    if (!users.length) return res.status(404).json({ error: "No users found for the selected filter." });
 
     const senderDept = dept || req.user.name || "Admin";
     const payload = {
@@ -168,7 +170,7 @@ async function broadcastNotification(req, res, next) {
 
     await Promise.allSettled(users.map(({ empId }) => sendPushToUser(empId, payload)));
 
-    res.json({ success: true, sentTo: users.length, targetDepts: depts || "all" });
+    res.json({ success: true, sentTo: users.length, targetDepts: depts || "all", targetLocations: locations || "all" });
   } catch (err) {
     next(err);
   }

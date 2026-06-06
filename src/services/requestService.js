@@ -498,9 +498,12 @@ class RequestService {
     if (!existing) throw new Error("Request not found.");
     if (existing.isClosed || existing.assignedStatus === "Pending Acknowledgement") throw new Error("Ticket already closed.");
 
+    const isSpecificallyAssigned = !!(existing.assignedPersonEmpId &&
+      existing.assignedPersonEmpId.split(",").map(s => s.trim()).includes(user.empId));
     const canClose = ["DeptHOD", "Management"].includes(user.role) ||
       (existing.assignedDept === user.dept && existing.dept !== user.dept) ||
-      (user.role === "Requestor" && user.dept === "Facilities" && existing.dept === "Facilities" && existing.assignedDept !== "Facilities");
+      (user.role === "Requestor" && user.dept === "Facilities" && existing.dept === "Facilities" && existing.assignedDept !== "Facilities") ||
+      isSpecificallyAssigned;
     if (!canClose) throw new Error("Not authorized to close.");
 
     const now = new Date();
@@ -675,6 +678,16 @@ class RequestService {
       orderBy: { dept: "asc" },
     });
     return users.map(u => u.dept).filter(Boolean).sort();
+  }
+
+  async getLocations() {
+    const users = await prisma.user.findMany({
+      where:   { isActive: true },
+      select:  { location: true },
+      distinct: ["location"],
+      orderBy: { location: "asc" },
+    });
+    return users.map(u => u.location).filter(Boolean).sort();
   }
 
   async markSeen(requestId, empId) {

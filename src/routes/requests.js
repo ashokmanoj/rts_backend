@@ -21,6 +21,9 @@ router.get("/users-by-dept", ctrl.getUsersByDept);
 // GET all active departments list
 router.get("/departments", ctrl.getDepartments);
 
+// GET all active locations list
+router.get("/locations", ctrl.getLocations);
+
 // ── Management Portal: HOD-pending requests & HOD-level approval ──────────
 router.get("/hod-pending", authorize("Management"), ctrl.getHodPending);
 router.patch("/:id/hod-approval", authorize("Management"), authorizeRequestAccess, ctrl.hodApproval);

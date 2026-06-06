@@ -84,9 +84,9 @@ async function close(req, res, next) {
     const result = await requestService.close(Number(req.params.id), req.user, req.body, req.file, req);
     res.json(result);
   } catch (err) {
-    if (err.message.includes("not found")) return res.status(404).json({ error: err.message });
-    if (err.message.includes("already closed")) return res.status(409).json({ error: err.message });
-    if (err.message.includes("not authorized")) return res.status(403).json({ error: err.message });
+    if (err.message.includes("not found"))    return res.status(404).json({ error: err.message });
+    if (err.message.includes("already closed") || err.message.includes("Ticket already closed")) return res.status(409).json({ error: err.message });
+    if (err.message.toLowerCase().includes("not authorized")) return res.status(403).json({ error: err.message });
     next(err);
   }
 }
@@ -148,6 +148,15 @@ async function getDepartments(req, res, next) {
   }
 }
 
+async function getLocations(req, res, next) {
+  try {
+    const locations = await requestService.getLocations();
+    res.json({ locations });
+  } catch (err) {
+    next(err);
+  }
+}
+
 async function deleteRequest(req, res, next) {
   try {
     const reqId = Number(req.params.id);
@@ -168,4 +177,4 @@ async function editRequest(req, res, next) {
   }
 }
 
-module.exports = { getAll, getById, getFilterOptions, create, approval, markSeen, markUnread, close, getHodPending, hodApproval, acknowledge, getUsersByDept, getDepartments, deleteRequest, editRequest };
+module.exports = { getAll, getById, getFilterOptions, create, approval, markSeen, markUnread, close, getHodPending, hodApproval, acknowledge, getUsersByDept, getDepartments, getLocations, deleteRequest, editRequest };
