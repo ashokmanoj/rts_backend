@@ -46,13 +46,11 @@ class RequestService {
     if (role === "SuperUser" || role === "Management" || role === "Admin") {
       roleFilter = {};
     } else if (role === "Requestor" && userDept?.startsWith("Management")) {
-      // Management dept requestors: own requests + tickets assigned to them or their dept
+      // Management dept requestors: own requests + specifically assigned to them only
       roleFilter = {
         OR: [
           { empId },
           { assignedPersonEmpId: { contains: empId } },
-          { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }] },
-          { assignedDepts: { contains: userDept } },
         ],
       };
     } else if (role === "DeptHOD") {
@@ -255,12 +253,11 @@ class RequestService {
     if (role === "SuperUser" || role === "Management" || role === "Admin") {
       roleFilter = {};
     } else if (role === "Requestor" && userDept?.startsWith("Management")) {
+      // Management dept requestors: own requests + specifically assigned to them only
       roleFilter = {
         OR: [
           { empId },
           { assignedPersonEmpId: { contains: empId } },
-          { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }] },
-          { assignedDepts: { contains: userDept } },
         ],
       };
     } else if (role === "DeptHOD") {
