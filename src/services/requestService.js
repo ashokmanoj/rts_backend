@@ -43,8 +43,18 @@ class RequestService {
     if (status === "closed") closureFilter = { resolvedDate: { not: null } };
 
     let roleFilter = {};
-    if (role === "SuperUser" || role === "Management" || role === "Admin" || (role === "Requestor" && userDept?.startsWith("Management"))) {
+    if (role === "SuperUser" || role === "Management" || role === "Admin") {
       roleFilter = {};
+    } else if (role === "Requestor" && userDept?.startsWith("Management")) {
+      // Management dept requestors: own requests + tickets assigned to them or their dept
+      roleFilter = {
+        OR: [
+          { empId },
+          { assignedPersonEmpId: { contains: empId } },
+          { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }] },
+          { assignedDepts: { contains: userDept } },
+        ],
+      };
     } else if (role === "DeptHOD") {
       // DeptHOD sees:
       //   1. Own requests
@@ -242,8 +252,17 @@ class RequestService {
   async getFilterOptions(user) {
     const { role, empId, dept: userDept } = user;
     let roleFilter = {};
-    if (role === "SuperUser" || role === "Management" || role === "Admin" || (role === "Requestor" && userDept?.startsWith("Management"))) {
+    if (role === "SuperUser" || role === "Management" || role === "Admin") {
       roleFilter = {};
+    } else if (role === "Requestor" && userDept?.startsWith("Management")) {
+      roleFilter = {
+        OR: [
+          { empId },
+          { assignedPersonEmpId: { contains: empId } },
+          { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }] },
+          { assignedDepts: { contains: userDept } },
+        ],
+      };
     } else if (role === "DeptHOD") {
       // DeptHOD sees:
       //   1. Own requests
@@ -386,10 +405,18 @@ class RequestService {
         checkingBy:         null,  checkingDeadline: null, checkingReason: null,
         assignedStatus:     "Open",
       };
-      // DeptHOD dual-dept popup forward also auto-approves their stepGumbi@123456
+      // DeptHOD dual-dept popup forward: auto-approve deptHodStatus
       if (body.dualDept && user.role === "DeptHOD") {
         updateData.deptHodStatus = "Approved";
         updateData.deptHodDate   = now;
+      }
+      // HOD dual-dept popup forward: auto-approve hodStatus (or assignedHodStatus if from assigned dept)
+      if (body.dualDept && user.role === "HOD") {
+        const isAssignedDeptHod = user.dept === existing.assignedDept && user.dept !== existing.dept;
+        const hodField     = isAssignedDeptHod ? "assignedHodStatus" : "hodStatus";
+        const hodDateField = isAssignedDeptHod ? "assignedHodDate"   : "hodDate";
+        updateData[hodField]     = "Approved";
+        updateData[hodDateField] = now;
       }
     } else if (["RM", "HOD", "DeptHOD", "Management"].includes(user.role)) {
       // If RM/HOD is from the ASSIGNED dept (not requestor's dept) → use assigned fields
@@ -437,9 +464,9 @@ class RequestService {
 
     const updated = await prisma.request.update({ where: { id: reqId }, data: updateData, include: WITH_OWNER });
 
-    const isDeptHodPopupForward = decision === "Forwarded" && body.dualDept && user.role === "DeptHOD";
+    const isDualPopupForward = decision === "Forwarded" && body.dualDept && (user.role === "DeptHOD" || user.role === "HOD");
 
-    if (isDeptHodPopupForward) {
+    if (isDualPopupForward) {
       // Two messages: first Approved, then Forwarded — both visible in chat
       await prisma.chatMessage.create({
         data: {
