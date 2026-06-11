@@ -222,9 +222,11 @@ class RequestService {
 
     let searchFilter = {};
     if (search && search.trim()) {
-      const term = search.trim();
+      const term  = search.trim();
+      const numId = /^\d+$/.test(term) ? parseInt(term, 10) : null;
       searchFilter = {
         OR: [
+          ...(numId !== null ? [{ id: numId }] : []),
           { purpose:     { contains: term, mode: "insensitive" } },
           { description: { contains: term, mode: "insensitive" } },
           { empId:       { contains: term, mode: "insensitive" } },
