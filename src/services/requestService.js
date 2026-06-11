@@ -402,19 +402,6 @@ class RequestService {
         checkingBy:         null,  checkingDeadline: null, checkingReason: null,
         assignedStatus:     "Open",
       };
-      // DeptHOD dual-dept popup forward: auto-approve deptHodStatus
-      if (body.dualDept && user.role === "DeptHOD") {
-        updateData.deptHodStatus = "Approved";
-        updateData.deptHodDate   = now;
-      }
-      // HOD dual-dept popup forward: auto-approve hodStatus (or assignedHodStatus if from assigned dept)
-      if (body.dualDept && user.role === "HOD") {
-        const isAssignedDeptHod = user.dept === existing.assignedDept && user.dept !== existing.dept;
-        const hodField     = isAssignedDeptHod ? "assignedHodStatus" : "hodStatus";
-        const hodDateField = isAssignedDeptHod ? "assignedHodDate"   : "hodDate";
-        updateData[hodField]     = "Approved";
-        updateData[hodDateField] = now;
-      }
     } else if (["RM", "HOD", "DeptHOD", "Management"].includes(user.role)) {
       // If RM/HOD is from the ASSIGNED dept (not requestor's dept) → use assigned fields
       const isAssignedDeptUser =
