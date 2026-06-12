@@ -1,5 +1,5 @@
 const router = require("express").Router({ caseSensitive: true });
-const { getUserLogReport, createUser, bulkCreateUsers, toggleUserStatus, getDeptTrackingReport, updateUser, resetPassword, getUserRoles, addUserRole, updateUserRole, deleteUserRole } = require("../controllers/adminController");
+const { getUserLogReport, createUser, bulkCreateUsers, toggleUserStatus, getDeptTrackingReport, updateUser, resetPassword, getUserRoles, addUserRole, updateUserRole, toggleUserRole, deleteUserRole } = require("../controllers/adminController");
 const { authenticate } = require("../middleware/auth");
 
 // All routes require authentication
@@ -26,10 +26,11 @@ router.patch("/update-user/:empId", updateUser);
 // PATCH /api/admin/reset-password/:empId  (SuperUser only)
 router.patch("/reset-password/:empId", resetPassword);
 
-// User Roles CRUD (SuperUser only)
-router.get("/user-roles",        getUserRoles);
-router.post("/user-roles",       addUserRole);
-router.patch("/user-roles/:id",  updateUserRole);
-router.delete("/user-roles/:id", deleteUserRole);
+// User Roles CRUD (SuperUser + HR DeptHOD)
+router.get("/user-roles",               getUserRoles);
+router.post("/user-roles",              addUserRole);
+router.patch("/user-roles/:id",         updateUserRole);
+router.patch("/user-roles/:id/toggle",  toggleUserRole);
+router.delete("/user-roles/:id",        deleteUserRole);
 
 module.exports = router;

@@ -74,12 +74,13 @@ model User {
 }
 
 model UserRole {
-  id    Int    @id @default(autoincrement())
-  empId String @map("emp_id")
-  role  Role
-  dept  String
+  id       Int     @id @default(autoincrement())
+  empId    String  @map("emp_id")
+  role     Role
+  dept     String
+  isActive Boolean @default(true) @map("is_active")
 
-  user  User   @relation(fields: [empId], references: [empId], onDelete: Cascade)
+  user     User    @relation(fields: [empId], references: [empId], onDelete: Cascade)
 
   @@unique([empId, role, dept])
   @@map("user_roles")

@@ -172,11 +172,12 @@ class AdminService {
       orderBy: [{ empId: "asc" }, { role: "asc" }, { dept: "asc" }],
     });
     return rows.map(r => ({
-      id:    r.id,
-      empId: r.empId,
-      name:  r.user?.name || "",
-      role:  r.role,
-      dept:  r.dept,
+      id:       r.id,
+      empId:    r.empId,
+      name:     r.user?.name || "",
+      role:     r.role,
+      dept:     r.dept,
+      isActive: r.isActive,
     }));
   }
 
@@ -200,6 +201,12 @@ class AdminService {
       if (e.code === "P2002") throw Object.assign(new Error("This role/dept combination already exists for this user."), { status: 400 });
       throw e;
     }
+  }
+
+  async toggleUserRole(id) {
+    const existing = await prisma.userRole.findUnique({ where: { id } });
+    if (!existing) throw Object.assign(new Error("Role entry not found."), { status: 404 });
+    return await prisma.userRole.update({ where: { id }, data: { isActive: !existing.isActive } });
   }
 
   async deleteUserRole(id) {

@@ -96,7 +96,7 @@ async function resetPassword(req, res, next) {
 
 async function getUserRoles(req, res, next) {
   try {
-    if (req.user.role !== "SuperUser") return res.status(403).json({ error: "Access denied." });
+    if (!isUserAdminLike(req.user)) return res.status(403).json({ error: "Access denied." });
     const data = await adminService.getUserRoles(req.query);
     res.json(data);
   } catch (err) { next(err); }
@@ -104,7 +104,7 @@ async function getUserRoles(req, res, next) {
 
 async function addUserRole(req, res, next) {
   try {
-    if (req.user.role !== "SuperUser") return res.status(403).json({ error: "Access denied." });
+    if (!isUserAdminLike(req.user)) return res.status(403).json({ error: "Access denied." });
     const { empId, role, dept } = req.body;
     if (!empId || !role || !dept) return res.status(400).json({ error: "empId, role and dept are required." });
     const entry = await adminService.addUserRole(empId, role, dept);
@@ -117,7 +117,7 @@ async function addUserRole(req, res, next) {
 
 async function updateUserRole(req, res, next) {
   try {
-    if (req.user.role !== "SuperUser") return res.status(403).json({ error: "Access denied." });
+    if (!isUserAdminLike(req.user)) return res.status(403).json({ error: "Access denied." });
     const id = parseInt(req.params.id);
     if (isNaN(id)) return res.status(400).json({ error: "Invalid id." });
     const { role, dept } = req.body;
@@ -130,9 +130,22 @@ async function updateUserRole(req, res, next) {
   }
 }
 
+async function toggleUserRole(req, res, next) {
+  try {
+    if (!isUserAdminLike(req.user)) return res.status(403).json({ error: "Access denied." });
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ error: "Invalid id." });
+    const entry = await adminService.toggleUserRole(id);
+    res.json(entry);
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.message });
+    next(err);
+  }
+}
+
 async function deleteUserRole(req, res, next) {
   try {
-    if (req.user.role !== "SuperUser") return res.status(403).json({ error: "Access denied." });
+    if (!isUserAdminLike(req.user)) return res.status(403).json({ error: "Access denied." });
     const id = parseInt(req.params.id);
     if (isNaN(id)) return res.status(400).json({ error: "Invalid id." });
     await adminService.deleteUserRole(id);
@@ -143,4 +156,4 @@ async function deleteUserRole(req, res, next) {
   }
 }
 
-module.exports = { getUserLogReport, createUser, bulkCreateUsers, toggleUserStatus, getDeptTrackingReport, updateUser, resetPassword, getUserRoles, addUserRole, updateUserRole, deleteUserRole };
+module.exports = { getUserLogReport, createUser, bulkCreateUsers, toggleUserStatus, getDeptTrackingReport, updateUser, resetPassword, getUserRoles, addUserRole, updateUserRole, toggleUserRole, deleteUserRole };
