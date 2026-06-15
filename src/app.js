@@ -11,12 +11,13 @@ const morgan       = require("morgan");
 const path         = require("path");
 const { default: rateLimit, ipKeyGenerator } = require("express-rate-limit");
 const errorHandler = require("./middleware/errorHandler");
-const authRoutes   = require("./routes/auth");
-const requestRoutes= require("./routes/requests");
-const adminRoutes  = require("./routes/admin");
-const foodRoutes   = require("./routes/food");
-const fileRoutes   = require("./routes/files");
-const pushRoutes   = require("./routes/push");
+const authRoutes        = require("./routes/auth");
+const requestRoutes     = require("./routes/requests");
+const adminRoutes       = require("./routes/admin");
+const foodRoutes        = require("./routes/food");
+const fileRoutes        = require("./routes/files");
+const pushRoutes        = require("./routes/push");
+const managementRoutes  = require("./routes/management");
 
 const app = express();
 app.set('trust proxy', 1); // Trust one hop (IIS reverse proxy) — prevents X-Forwarded-For spoofing
@@ -100,12 +101,13 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // ── API routes ────────────────────────────────────────────────────────────────
-app.use("/api/auth",     authRoutes);
-app.use("/api/requests", requestRoutes);
-app.use("/api/admin",    adminRoutes);
-app.use("/api/food",     foodRoutes);
-app.use("/api/files",    fileRoutes);
-app.use("/api/push",     pushRoutes);
+app.use("/api/auth",       authRoutes);
+app.use("/api/requests",   requestRoutes);
+app.use("/api/admin",      adminRoutes);
+app.use("/api/food",       foodRoutes);
+app.use("/api/files",      fileRoutes);
+app.use("/api/push",       pushRoutes);
+app.use("/api/management", managementRoutes);
 
 // ── Health check ──────────────────────────────────────────────────────────────
 app.get("/api/health", (_req, res) =>

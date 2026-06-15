@@ -93,7 +93,7 @@ async function close(req, res, next) {
 
 async function getHodPending(req, res, next) {
   try {
-    const result = await requestService.getHodPendingRequests(req.user);
+    const result = await requestService.getHodPendingRequests(req.user, req.query);
     res.json(result);
   } catch (err) {
     next(err);
