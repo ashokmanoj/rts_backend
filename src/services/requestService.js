@@ -396,14 +396,24 @@ class RequestService {
         forwardedAt:   now,
         assignedDept:  newDept,
         assignedDepts: allDepts.join(","),   // preserved for all forward types
-        // Preserve rmStatus/hodStatus (requestor's dept approvals — shown in RM/HOD columns).
-        // Only reset assigned-dept fields so the receiving dept gets fresh action buttons.
+        // Reset assigned-dept fields so the receiving dept gets fresh action buttons.
+        // rmStatus/hodStatus for the requestor's dept are updated below if applicable.
         deptHodStatus:      "--",  deptHodDate:      null,
         assignedRmStatus:   "--",  assignedRmDate:   null,
         assignedHodStatus:  "--",  assignedHodDate:  null,
         checkingBy:         null,  checkingDeadline: null, checkingReason: null,
         assignedStatus:     "Open",
       };
+      // Record the forwarder's own status so their column shows "Forwarded" rather than "--".
+      // Only applies when the forwarder is from the requestor's dept (not the assigned dept);
+      // assigned-dept RM/HOD fields are now reserved for the receiving dept's fresh use.
+      if (user.role === "RM" || user.role === "HOD") {
+        const isFromAssignedDept = user.dept === existing.assignedDept && user.dept !== existing.dept;
+        if (!isFromAssignedDept) {
+          if (user.role === "RM") { updateData.rmStatus = "Forwarded"; updateData.rmDate = now; }
+          else                    { updateData.hodStatus = "Forwarded"; updateData.hodDate = now; }
+        }
+      }
     } else if (["RM", "HOD", "DeptHOD", "Management"].includes(user.role)) {
       // If RM/HOD is from the ASSIGNED dept (not requestor's dept) → use assigned fields
       const isAssignedDeptUser =
