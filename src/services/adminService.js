@@ -91,17 +91,26 @@ class AdminService {
     const existing = await prisma.user.findFirst({ where: { OR: [{ empId }, { email: { equals: email.trim(), mode: "insensitive" } }] } });
     if (existing) throw new Error("User with this Employee ID or Email already exists.");
 
+    if (rmEmpId) {
+      const rm = await prisma.user.findUnique({ where: { empId: rmEmpId } });
+      if (!rm) throw Object.assign(new Error(`RM Employee ID "${rmEmpId}" not found.`), { status: 400 });
+    }
+    if (hodEmpId) {
+      const hod = await prisma.user.findUnique({ where: { empId: hodEmpId } });
+      if (!hod) throw Object.assign(new Error(`HOD Employee ID "${hodEmpId}" not found.`), { status: 400 });
+    }
+
     const passwordHash = await bcrypt.hash(password, 10);
     return prisma.user.create({
-      data: { 
-        empId, 
-        name, 
-        email: email.toLowerCase(), 
-        phone, 
-        role: role || roles.REQUESTOR, 
-        dept: dept || "Other", 
-        designation, 
-        location, 
+      data: {
+        empId,
+        name,
+        email: email.toLowerCase(),
+        phone,
+        role: role || roles.REQUESTOR,
+        dept: dept || "Other",
+        designation,
+        location,
         passwordHash,
         rmEmpId: rmEmpId || null,
         hodEmpId: hodEmpId || null,
@@ -125,7 +134,16 @@ class AdminService {
 
   async updateUser(empId, data) {
     const { name, email, phone, role, dept, designation, location, rmEmpId, hodEmpId } = data;
-    
+
+    if (rmEmpId) {
+      const rm = await prisma.user.findUnique({ where: { empId: rmEmpId } });
+      if (!rm) throw Object.assign(new Error(`RM Employee ID "${rmEmpId}" not found.`), { status: 400 });
+    }
+    if (hodEmpId) {
+      const hod = await prisma.user.findUnique({ where: { empId: hodEmpId } });
+      if (!hod) throw Object.assign(new Error(`HOD Employee ID "${hodEmpId}" not found.`), { status: 400 });
+    }
+
     return prisma.user.update({
       where: { empId },
       data: {

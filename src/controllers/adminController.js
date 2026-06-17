@@ -44,7 +44,7 @@ async function createUser(req, res, next) {
     const newUser = await adminService.createUser(req.body);
     res.status(201).json({ message: "User created successfully", user: { empId: newUser.empId, name: newUser.name } });
   } catch (err) {
-    if (err.message.includes("already exists")) return res.status(400).json({ error: err.message });
+    if (err.status === 400 || err.message.includes("already exists")) return res.status(400).json({ error: err.message });
     next(err);
   }
 }
@@ -79,6 +79,7 @@ async function updateUser(req, res, next) {
     const updatedUser = await adminService.updateUser(empId, req.body);
     res.json({ message: "User updated successfully", user: updatedUser });
   } catch (err) {
+    if (err.status === 400) return res.status(400).json({ error: err.message });
     next(err);
   }
 }
