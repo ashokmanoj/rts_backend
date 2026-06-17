@@ -10,8 +10,9 @@
 const adminService = require("../services/adminService");
 
 function isUserAdminLike(user) {
-  const { role, dept } = user;
-  return ["SuperUser", "Admin", "Management"].includes(role) || (role === "DeptHOD" && dept === "HR");
+  const role = (user?.role || "").trim();
+  const dept = (user?.dept || "").trim().toLowerCase();
+  return ["SuperUser", "Admin", "Management"].includes(role) || (role === "DeptHOD" && dept === "hr");
 }
 
 async function getUserLogReport(req, res, next) {

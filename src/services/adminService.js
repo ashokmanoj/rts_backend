@@ -184,12 +184,15 @@ class AdminService {
   async addUserRole(empId, role, dept) {
     const user = await prisma.user.findUnique({ where: { empId } });
     if (!user) throw Object.assign(new Error(`User ${empId} not found.`), { status: 404 });
-    try {
-      return await prisma.userRole.create({ data: { empId, role, dept } });
-    } catch (e) {
-      if (e.code === "P2002") throw Object.assign(new Error("This role/dept combination already exists for this user."), { status: 400 });
-      throw e;
+
+    // If an inactive record already exists for this combo, reactivate it instead of creating a duplicate
+    const existing = await prisma.userRole.findFirst({ where: { empId, role, dept } });
+    if (existing) {
+      if (existing.isActive) throw Object.assign(new Error("This role/dept combination already exists for this user."), { status: 400 });
+      return await prisma.userRole.update({ where: { id: existing.id }, data: { isActive: true } });
     }
+
+    return await prisma.userRole.create({ data: { empId, role, dept } });
   }
 
   async updateUserRole(id, role, dept) {

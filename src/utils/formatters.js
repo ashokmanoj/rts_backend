@@ -26,6 +26,7 @@ function formatRequest(row, viewerEmpId) {
   return {
     id:             row.id,
     date:           new Date(row.createdAt).toLocaleDateString("en-IN"),
+    time:           new Date(row.createdAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }),
     empId:          row.empId,
     name:           row.owner?.name        ?? row.empId,
     dept:           row.owner?.dept        ?? row.dept,

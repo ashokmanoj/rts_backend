@@ -14,6 +14,19 @@ const { sendNewRequestNotification } = require("../utils/pushService");
 
 const WITH_OWNER = { owner: true, closeTicket: true, chatMessages: true, readReceipts: true };
 
+function computeNextRecurringDate(interval) {
+  const d = new Date();
+  switch (interval) {
+    case "1w":  d.setDate(d.getDate() + 7);        break;
+    case "2w":  d.setDate(d.getDate() + 14);       break;
+    case "1m":  d.setMonth(d.getMonth() + 1);      break;
+    case "6m":  d.setMonth(d.getMonth() + 6);      break;
+    case "1y":  d.setFullYear(d.getFullYear() + 1); break;
+    default: return null;
+  }
+  return d;
+}
+
 class RequestService {
   buildFileUrl(req, filename) {
     if (!filename) return null;
@@ -334,10 +347,13 @@ class RequestService {
   }
 
   async create(user, data, uploadedFiles, req) {
-    const { purpose, description, assignedDept, assignedDepts, dueDate, assignedPersonEmpId, assignedPersonName } = data;
+    const { purpose, description, assignedDept, assignedDepts, dueDate, assignedPersonEmpId, assignedPersonName, isRecurring, recurringInterval } = data;
 
     const files = Array.isArray(uploadedFiles) ? uploadedFiles : (uploadedFiles ? [uploadedFiles] : []);
     const first = files[0] ?? null;
+
+    const recurring = isRecurring === true || isRecurring === "true";
+    const nextDate  = recurring ? computeNextRecurringDate(recurringInterval) : null;
 
     const request = await prisma.request.create({
       data: {
@@ -355,6 +371,9 @@ class RequestService {
         dueDate:             dueDate ? new Date(dueDate) : null,
         assignedPersonEmpId: assignedPersonEmpId || null,
         assignedPersonName:  Array.isArray(assignedPersonName) ? (assignedPersonName[0] || null) : (assignedPersonName || null),
+        isRecurring:         recurring,
+        recurringInterval:   recurring ? (recurringInterval || null) : null,
+        nextRecurringDate:   nextDate,
         readReceipts:        { create: { empId: user.empId } },
       },
       include: WITH_OWNER,

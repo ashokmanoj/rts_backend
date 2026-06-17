@@ -14,6 +14,9 @@ router.get("/filter-options", ctrl.getFilterOptions);
 //      ?search=&hodStatus=pending&rmStatus=approved&dept=HR&status=open&page=1&limit=20
 router.get("/requests", ctrl.listRequests);
 
+// GET  /api/management/requests/filters  (alias — must be before /:id)
+router.get("/requests/filters", ctrl.getFilterOptions);
+
 // GET  /api/management/requests/:id
 router.get("/requests/:id", authorizeRequestAccess, ctrl.getRequest);
 
