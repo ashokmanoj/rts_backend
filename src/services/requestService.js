@@ -107,23 +107,12 @@ class RequestService {
           { AND: [{ owner: { hodEmpId: empId } }, { assignedDepts: { contains: userDept } }] },
         ],
       };
-    } else if (["Academics","Animation", "Software"].some(p => userDept?.startsWith(p))) {
-      // These depts: only own requests + specifically assigned (no dept-wide visibility)
-      roleFilter = {
-        OR: [
-          { empId },
-          { assignedPersonEmpId: { contains: empId } },
-        ],
-      };
     } else {
-      // Other regular staff: own requests + incoming to their dept + specifically assigned + forwarding chain
+      // Interns and any other non-privileged roles: own + assigned only
       roleFilter = {
         OR: [
           { empId },
-          { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }] },
           { assignedPersonEmpId: { contains: empId } },
-          // Tracking: requests forwarded from/through their dept remain visible
-          { assignedDepts: { contains: userDept } },
         ],
       };
     }
@@ -267,8 +256,8 @@ class RequestService {
     let roleFilter = {};
     if (role === "SuperUser" || role === "Management" || role === "Admin") {
       roleFilter = {};
-    } else if (role === "Requestor" && userDept?.startsWith("Management")) {
-      // Management dept requestors: own requests + specifically assigned to them only
+    } else if (role === "Requestor") {
+      // Requestors (all depts): only own requests + specifically assigned to them
       roleFilter = {
         OR: [
           { empId },
@@ -276,12 +265,6 @@ class RequestService {
         ],
       };
     } else if (role === "DeptHOD") {
-      // DeptHOD sees:
-      //   1. Own requests
-      //   2. External incoming: other dept → their dept  (assignedDept = userDept, dept ≠ userDept)
-      //   3. Self-targeted: user targets their own dept  (dept = userDept AND assignedDept = userDept)
-      //   4. Forwarding chain
-      // Does NOT see: outgoing from their dept to other depts (dept = userDept, assignedDept ≠ userDept)
       roleFilter = { OR: [
         { empId },
         { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }] },
@@ -308,20 +291,12 @@ class RequestService {
           { AND: [{ owner: { hodEmpId: empId } }, { assignedDepts: { contains: userDept } }] },
         ],
       };
-    } else if (["Academics", "Animation", "Software"].some(p => userDept?.startsWith(p))) {
-      roleFilter = {
-        OR: [
-          { empId },
-          { assignedPersonEmpId: { contains: empId } },
-        ],
-      };
     } else {
+      // Interns and any other non-privileged roles: own + assigned only
       roleFilter = {
         OR: [
           { empId },
-          { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }] },
           { assignedPersonEmpId: { contains: empId } },
-          { assignedDepts: { contains: userDept } },
         ],
       };
     }
