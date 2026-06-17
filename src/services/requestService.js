@@ -55,17 +55,38 @@ class RequestService {
     if (status === "open") closureFilter = { resolvedDate: null };
     if (status === "closed") closureFilter = { resolvedDate: { not: null } };
 
+    // Requestor depts where visibility is restricted to own + assigned only
+    const RESTRICTED_REQUESTOR_PREFIXES = ["Operations-", "Academics-"];
+    const RESTRICTED_REQUESTOR_EXACT    = new Set(["Game Development", "Software", "Animation"]);
+    const isRestrictedRequestorDept = (dept) =>
+      RESTRICTED_REQUESTOR_PREFIXES.some(p => dept?.startsWith(p)) ||
+      RESTRICTED_REQUESTOR_EXACT.has(dept);
+
     let roleFilter = {};
     if (role === "SuperUser" || role === "Management" || role === "Admin") {
       roleFilter = {};
-    } else if (role === "Requestor" && userDept?.startsWith("Management")) {
-      // Management dept requestors: own requests + specifically assigned to them only
-      roleFilter = {
-        OR: [
-          { empId },
-          { assignedPersonEmpId: { contains: empId } },
-        ],
-      };
+    } else if (role === "Requestor") {
+      if (isRestrictedRequestorDept(userDept)) {
+        // Restricted depts (Operations, Academics, Game Development, Software, Animation):
+        // own requests + specifically assigned only — no dept-wide visibility
+        roleFilter = {
+          OR: [
+            { empId },
+            { assignedPersonEmpId: { contains: empId } },
+          ],
+        };
+      } else {
+        // Other depts (HR, Purchase, Broadcasting, etc.):
+        // own + incoming to their dept + assigned + forwarding chain
+        roleFilter = {
+          OR: [
+            { empId },
+            { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }] },
+            { assignedPersonEmpId: { contains: empId } },
+            { assignedDepts: { contains: userDept } },
+          ],
+        };
+      }
     } else if (role === "DeptHOD") {
       // DeptHOD sees:
       //   1. Own requests
@@ -253,17 +274,33 @@ class RequestService {
 
   async getFilterOptions(user) {
     const { role, empId, dept: userDept } = user;
+    const RESTRICTED_REQUESTOR_PREFIXES = ["Operations-", "Academics-"];
+    const RESTRICTED_REQUESTOR_EXACT    = new Set(["Game Development", "Software", "Animation"]);
+    const isRestrictedRequestorDept = (dept) =>
+      RESTRICTED_REQUESTOR_PREFIXES.some(p => dept?.startsWith(p)) ||
+      RESTRICTED_REQUESTOR_EXACT.has(dept);
+
     let roleFilter = {};
     if (role === "SuperUser" || role === "Management" || role === "Admin") {
       roleFilter = {};
     } else if (role === "Requestor") {
-      // Requestors (all depts): only own requests + specifically assigned to them
-      roleFilter = {
-        OR: [
-          { empId },
-          { assignedPersonEmpId: { contains: empId } },
-        ],
-      };
+      if (isRestrictedRequestorDept(userDept)) {
+        roleFilter = {
+          OR: [
+            { empId },
+            { assignedPersonEmpId: { contains: empId } },
+          ],
+        };
+      } else {
+        roleFilter = {
+          OR: [
+            { empId },
+            { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }] },
+            { assignedPersonEmpId: { contains: empId } },
+            { assignedDepts: { contains: userDept } },
+          ],
+        };
+      }
     } else if (role === "DeptHOD") {
       roleFilter = { OR: [
         { empId },
