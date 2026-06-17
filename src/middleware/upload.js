@@ -23,8 +23,8 @@ const ALLOWED_EXTENSIONS = new Set([
   ".pdf", ".doc", ".docx",
   // Spreadsheets / data
   ".xls", ".xlsx", ".csv",
-  // Archives
-  ".zip", ".rar", ".7z", ".tar", ".gz",
+  // Archives / packages
+  ".zip", ".rar", ".7z", ".tar", ".gz", ".jar",
   // Audio
   ".mp3", ".wav", ".m4a", ".ogg",
   // Video
@@ -38,7 +38,7 @@ const fileFilter = (_req, file, cb) => {
   }
   const err = new Error(
     "Invalid file type. Allowed: Images (jpg/png/gif/webp/svg), PDF, Word, Excel, CSV, " +
-    "Archives (zip/rar/7z), Audio (mp3/wav/ogg), Video (mp4/mov/avi/mkv)."
+    "Archives (zip/rar/7z/jar), Audio (mp3/wav/ogg), Video (mp4/mov/avi/mkv)."
   );
   err.status = 400;
   cb(err);
