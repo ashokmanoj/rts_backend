@@ -154,9 +154,12 @@ model Request {
 
   // Recurring request settings
   isRecurring        Boolean   @default(false) @map("is_recurring")
-  recurringInterval  String?   @map("recurring_interval")  // "1w" | "2w" | "1m" | "6m" | "1y"
+  recurringInterval  String?   @map("recurring_interval")  // "1m" | "4m" | "6m" | "1y"
   nextRecurringDate  DateTime? @map("next_recurring_date")
   recurringParentId  Int?      @map("recurring_parent_id")
+
+  // Reopen tracking
+  reopenedAt         DateTime? @map("reopened_at")
 
   owner        User          @relation("RequestOwner", fields: [empId], references: [empId])
   chatMessages ChatMessage[]

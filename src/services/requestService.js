@@ -57,7 +57,7 @@ class RequestService {
 
     // Requestor depts where visibility is restricted to own + assigned only
     const RESTRICTED_REQUESTOR_PREFIXES = ["Operations-", "Academics-"];
-    const RESTRICTED_REQUESTOR_EXACT    = new Set(["Game Development", "Software", "Animation"]);
+    const RESTRICTED_REQUESTOR_EXACT    = new Set(["Game Development", "Software", "Animation", "Management"]);
     const isRestrictedRequestorDept = (dept) =>
       RESTRICTED_REQUESTOR_PREFIXES.some(p => dept?.startsWith(p)) ||
       RESTRICTED_REQUESTOR_EXACT.has(dept);
@@ -95,7 +95,7 @@ class RequestService {
       //   4. Forwarding chain
       // Does NOT see: outgoing from their dept to other depts (dept = userDept, assignedDept ≠ userDept)
       roleFilter = { OR: [
-        { empId },
+        { AND: [{ empId }, { dept: userDept }] },
         { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }] },
         { AND: [{ dept: userDept }, { assignedDept: userDept }] },
         { assignedDepts: { contains: userDept } },
@@ -103,7 +103,8 @@ class RequestService {
     } else if (role === "RM") {
       roleFilter = {
         OR: [
-          { empId },
+          // Own requests submitted from this dept only (prevents cross-dept bleed for multi-role users)
+          { AND: [{ empId }, { dept: userDept }] },
           // Own dept direct reports (outgoing requests)
           { AND: [{ owner: { rmEmpId: empId } }, { dept: userDept }] },
           // Incoming from other depts (current assignedDept)
@@ -117,7 +118,8 @@ class RequestService {
     } else if (role === "HOD") {
       roleFilter = {
         OR: [
-          { empId },
+          // Own requests submitted from this dept only
+          { AND: [{ empId }, { dept: userDept }] },
           // Own dept direct reports (outgoing requests)
           { AND: [{ owner: { hodEmpId: empId } }, { dept: userDept }] },
           // Incoming from other depts
@@ -265,7 +267,16 @@ class RequestService {
     const order = sortOrder === "asc" ? "asc" : "desc";
 
     const [requests, total] = await Promise.all([
-      prisma.request.findMany({ where, include: WITH_OWNER, orderBy: { createdAt: order }, skip, take }),
+      prisma.request.findMany({
+        where,
+        include:  WITH_OWNER,
+        orderBy:  [
+          { reopenedAt: { sort: "desc", nulls: "last" } },
+          { createdAt:  order },
+        ],
+        skip,
+        take,
+      }),
       prisma.request.count({ where }),
     ]);
 
@@ -275,7 +286,7 @@ class RequestService {
   async getFilterOptions(user) {
     const { role, empId, dept: userDept } = user;
     const RESTRICTED_REQUESTOR_PREFIXES = ["Operations-", "Academics-"];
-    const RESTRICTED_REQUESTOR_EXACT    = new Set(["Game Development", "Software", "Animation"]);
+    const RESTRICTED_REQUESTOR_EXACT    = new Set(["Game Development", "Software", "Animation", "Management"]);
     const isRestrictedRequestorDept = (dept) =>
       RESTRICTED_REQUESTOR_PREFIXES.some(p => dept?.startsWith(p)) ||
       RESTRICTED_REQUESTOR_EXACT.has(dept);
@@ -303,7 +314,7 @@ class RequestService {
       }
     } else if (role === "DeptHOD") {
       roleFilter = { OR: [
-        { empId },
+        { AND: [{ empId }, { dept: userDept }] },
         { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }] },
         { AND: [{ dept: userDept }, { assignedDept: userDept }] },
         { assignedDepts: { contains: userDept } },
@@ -311,7 +322,7 @@ class RequestService {
     } else if (role === "RM") {
       roleFilter = {
         OR: [
-          { empId },
+          { AND: [{ empId }, { dept: userDept }] },
           { AND: [{ owner: { rmEmpId: empId } }, { dept: userDept }] },
           { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }] },
           { AND: [{ assignedDepts: { contains: userDept } }, { dept: { not: userDept } }] },
@@ -321,7 +332,7 @@ class RequestService {
     } else if (role === "HOD") {
       roleFilter = {
         OR: [
-          { empId },
+          { AND: [{ empId }, { dept: userDept }] },
           { AND: [{ owner: { hodEmpId: empId } }, { dept: userDept }] },
           { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }] },
           { AND: [{ assignedDepts: { contains: userDept } }, { dept: { not: userDept } }] },
@@ -838,9 +849,12 @@ class RequestService {
         assignedRmStatus: "--",   assignedRmDate: null,
         assignedHodStatus: "--",  assignedHodDate: null,
         checkingBy: null, checkingDeadline: null, checkingReason: null,
+        reopenedAt: new Date(),
       };
       chatText = "🔄 Requestor reported not received — ticket has been reopened. All approval statuses reset.";
       await prisma.closeTicket.deleteMany({ where: { requestId: reqId } });
+      // Clear all read receipts so the ticket appears as unread/top for all users
+      await prisma.requestRead.deleteMany({ where: { requestId: reqId } });
     }
 
     const updated = await prisma.request.update({
@@ -929,6 +943,34 @@ class RequestService {
     await prisma.chatMessage.create({
       data: { requestId: reqId, authorId: user.empId, author: user.name, role: user.role, type: "system", text: `✏️ Request edited by ${user.name} (SuperUser).` },
     });
+    return formatRequest(updated, user.empId);
+  }
+
+  async stopRecurring(reqId, user) {
+    if (user.role !== "DeptHOD") throw Object.assign(new Error("Only DeptHOD can stop recurring."), { status: 403 });
+
+    const existing = await prisma.request.findUnique({ where: { id: reqId } });
+    if (!existing) throw Object.assign(new Error("Request not found."), { status: 404 });
+    if (!existing.isRecurring) throw Object.assign(new Error("This request is not recurring."), { status: 400 });
+    if (existing.assignedDept !== user.dept) throw Object.assign(new Error("Unauthorized — not your assigned dept."), { status: 403 });
+
+    const updated = await prisma.request.update({
+      where: { id: reqId },
+      data:  { isRecurring: false, nextRecurringDate: null },
+      include: WITH_OWNER,
+    });
+
+    await prisma.chatMessage.create({
+      data: {
+        requestId: reqId,
+        authorId:  user.empId,
+        author:    user.name,
+        role:      user.role,
+        type:      "system",
+        text:      `🔁 Recurring schedule stopped by ${user.name} (Dept HOD — ${user.dept}). No further auto-requests will be created.`,
+      },
+    });
+
     return formatRequest(updated, user.empId);
   }
 }

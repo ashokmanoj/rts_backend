@@ -100,6 +100,14 @@ function formatRequest(row, viewerEmpId) {
     acknowledgement:  row.acknowledgement  ?? null,
     acknowledgedAt:   pad(row.acknowledgedAt),
 
+    // Reopen tracking
+    reopenedAt:      row.reopenedAt ? new Date(row.reopenedAt).toLocaleString("en-IN") : null,
+
+    // Recurring
+    isRecurring:        row.isRecurring       ?? false,
+    recurringInterval:  row.recurringInterval ?? null,
+    recurringParentId:  row.recurringParentId ?? null,
+
     // GN-route: requestor's RM or HOD is GN-01 or GN-02 → goes to Management portal
     isGnRoute: !!(["GN-01", "GN-02"].includes(row.owner?.rmEmpId) || ["GN-01", "GN-02"].includes(row.owner?.hodEmpId)),
 

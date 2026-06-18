@@ -7,10 +7,9 @@ const { sendNewRequestNotification } = require("./pushService");
 function computeNextRecurringDate(interval) {
   const d = new Date();
   switch (interval) {
-    case "1w":  d.setDate(d.getDate() + 7);        break;
-    case "2w":  d.setDate(d.getDate() + 14);       break;
-    case "1m":  d.setMonth(d.getMonth() + 1);      break;
-    case "6m":  d.setMonth(d.getMonth() + 6);      break;
+    case "1m":  d.setMonth(d.getMonth() + 1);       break;
+    case "4m":  d.setMonth(d.getMonth() + 4);       break;
+    case "6m":  d.setMonth(d.getMonth() + 6);       break;
     case "1y":  d.setFullYear(d.getFullYear() + 1); break;
     default: return null;
   }

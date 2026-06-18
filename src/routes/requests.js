@@ -44,6 +44,9 @@ router.patch("/:id/unread", authorizeRequestAccess, ctrl.markUnread);
 // Requestor acknowledgement after close
 router.patch("/:id/acknowledge", authorizeRequestAccess, ctrl.acknowledge);
 
+// DeptHOD: stop recurring schedule
+router.patch("/:id/stop-recurring", authorizeRequestAccess, ctrl.stopRecurring);
+
 // Close request (optional file)
 router.patch("/:id/close", upload.single("file"), authorizeRequestAccess, ctrl.close);
 
