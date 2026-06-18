@@ -24,6 +24,10 @@ router.get("/departments", ctrl.getDepartments);
 // GET all active locations list
 router.get("/locations", ctrl.getLocations);
 
+// Broadcast Send — DeptHOD of HR / Food Committee / TA Committee / RTS Help Desk
+router.get("/broadcast-users", ctrl.broadcastUsers);
+router.post("/broadcast-send", ctrl.broadcastSend);
+
 // ── Management Portal: HOD-pending requests & HOD-level approval ──────────
 router.get("/hod-pending", authorize("Management"), ctrl.getHodPending);
 router.patch("/:id/hod-approval", authorize("Management"), authorizeRequestAccess, ctrl.hodApproval);

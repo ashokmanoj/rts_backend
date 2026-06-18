@@ -177,6 +177,27 @@ async function editRequest(req, res, next) {
   }
 }
 
+async function broadcastUsers(req, res, next) {
+  try {
+    const users = await requestService.broadcastUsers(req.user);
+    res.json(users);
+  } catch (err) {
+    if (err.status === 403) return res.status(403).json({ error: err.message });
+    next(err);
+  }
+}
+
+async function broadcastSend(req, res, next) {
+  try {
+    const result = await requestService.broadcastSend(req.user, req.body);
+    res.json(result);
+  } catch (err) {
+    if (err.status === 403) return res.status(403).json({ error: err.message });
+    if (err.status === 400) return res.status(400).json({ error: err.message });
+    next(err);
+  }
+}
+
 async function stopRecurring(req, res, next) {
   try {
     const reqId = Number(req.params.id);
@@ -190,4 +211,4 @@ async function stopRecurring(req, res, next) {
   }
 }
 
-module.exports = { getAll, getById, getFilterOptions, create, approval, markSeen, markUnread, close, getHodPending, hodApproval, acknowledge, getUsersByDept, getDepartments, getLocations, deleteRequest, editRequest, stopRecurring };
+module.exports = { getAll, getById, getFilterOptions, create, approval, markSeen, markUnread, close, getHodPending, hodApproval, acknowledge, getUsersByDept, getDepartments, getLocations, deleteRequest, editRequest, stopRecurring, broadcastUsers, broadcastSend };

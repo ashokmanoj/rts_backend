@@ -949,6 +949,70 @@ class RequestService {
     return formatRequest(updated, user.empId);
   }
 
+  async broadcastUsers(user) {
+    const ALLOWED_DEPTS = ["HR", "Food Committee", "TA Committee", "RTS Help Desk"];
+    if (user.role !== "DeptHOD" || !ALLOWED_DEPTS.includes(user.dept)) {
+      throw Object.assign(new Error("Not authorized."), { status: 403 });
+    }
+    const users = await prisma.user.findMany({
+      where:   { isActive: true, empId: { not: user.empId } },
+      select:  { empId: true, name: true, dept: true, location: true },
+      orderBy: [{ dept: "asc" }, { name: "asc" }],
+    });
+    return users;
+  }
+
+  async broadcastSend(user, body) {
+    const ALLOWED_DEPTS = ["HR", "Food Committee", "TA Committee", "RTS Help Desk"];
+    if (user.role !== "DeptHOD" || !ALLOWED_DEPTS.includes(user.dept)) {
+      throw Object.assign(new Error("Not authorized."), { status: 403 });
+    }
+
+    const { title, description, sendToAll, targetDepts, targetLocations, targetEmpIds } = body;
+    if (!title?.trim()) throw Object.assign(new Error("Title is required."), { status: 400 });
+
+    const baseWhere = { isActive: true, empId: { not: user.empId } };
+
+    if (!sendToAll) {
+      const orFilters = [];
+      if (targetDepts?.length)     orFilters.push({ dept:     { in: targetDepts } });
+      if (targetLocations?.length) orFilters.push({ location: { in: targetLocations } });
+      if (targetEmpIds?.length)    orFilters.push({ empId:    { in: targetEmpIds } });
+      if (!orFilters.length) throw Object.assign(new Error("Select at least one target."), { status: 400 });
+      baseWhere.OR = orFilters;
+    }
+
+    const targets = await prisma.user.findMany({
+      where:  baseWhere,
+      select: { empId: true, dept: true, name: true },
+    });
+
+    if (!targets.length) throw Object.assign(new Error("No users matched the selection."), { status: 400 });
+
+    const now = new Date();
+
+    await prisma.request.createMany({
+      data: targets.map(t => ({
+        empId:               user.empId,
+        purpose:             title.trim(),
+        description:         description?.trim() || null,
+        dept:                user.dept,
+        assignedDept:        t.dept,
+        assignedPersonEmpId: t.empId,
+        assignedPersonName:  t.name,
+        requestorRole:       "broadcast",
+        isClosed:            true,
+        resolvedDate:        now,
+        resolvedBy:          `${user.name} (Broadcast)`,
+        assignedStatus:      "Broadcast",
+        deptHodStatus:       "Approved",
+        deptHodDate:         now,
+      })),
+    });
+
+    return { success: true, sentTo: targets.length };
+  }
+
   async stopRecurring(reqId, user) {
     if (user.role !== "DeptHOD") throw Object.assign(new Error("Only DeptHOD can stop recurring."), { status: 403 });
 
