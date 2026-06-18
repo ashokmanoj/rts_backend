@@ -118,6 +118,10 @@ model Request {
   deptHodStatus  String    @default("--") @map("dept_hod_status")
   deptHodDate    DateTime? @map("dept_hod_date")
 
+  // Management portal approval (separate from DeptHOD so both can act independently)
+  managementStatus String    @default("--") @map("management_status")
+  managementDate   DateTime? @map("management_date")
+
   // Assigned dept RM/HOD approval (separate from requestor's dept RM/HOD)
   assignedRmStatus  String    @default("--") @map("assigned_rm_status")
   assignedRmDate    DateTime? @map("assigned_rm_date")

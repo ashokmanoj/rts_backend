@@ -53,6 +53,8 @@ function formatRequest(row, viewerEmpId) {
     assignedHodDate:   pad(row.assignedHodDate),
     deptHodStatus:  row.deptHodStatus,
     deptHodDate:    pad(row.deptHodDate),
+    managementStatus: row.managementStatus ?? "--",
+    managementDate:   pad(row.managementDate),
 
     // Forwarding
     assignedDept:      row.assignedDept,

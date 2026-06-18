@@ -470,6 +470,9 @@ class RequestService {
       } else if (user.role === "HOD") {
         field     = isAssignedDeptUser ? "assignedHodStatus" : "hodStatus";
         dateField = isAssignedDeptUser ? "assignedHodDate"   : "hodDate";
+      } else if (user.role === "Management") {
+        field     = "managementStatus";
+        dateField = "managementDate";
       } else {
         field     = "deptHodStatus";
         dateField = "deptHodDate";
