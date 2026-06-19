@@ -127,6 +127,7 @@ function formatMessage(row) {
     id:           row.id,
     author:       row.author,
     role:         row.role,
+    dept:         row.dept         ?? null,
     type:         row.type,
     text:         row.text         ?? "",
     fileUrl:      row.fileUrl      ?? null,
