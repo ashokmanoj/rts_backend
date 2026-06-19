@@ -56,8 +56,8 @@ class RequestService {
     if (status === "closed") closureFilter = { resolvedDate: { not: null } };
 
     // Requestor depts where visibility is restricted to own + assigned only
-    const RESTRICTED_REQUESTOR_PREFIXES = ["Operations-", "Academics-"];
-    const RESTRICTED_REQUESTOR_EXACT    = new Set(["Game Development", "Software", "Animation", "Management"]);
+    const RESTRICTED_REQUESTOR_PREFIXES = ["Operations-", "Academics-", "Stores-"];
+    const RESTRICTED_REQUESTOR_EXACT    = new Set(["Game Development", "Software", "Animation", "Management", "HR", "Purchase"]);
     const isRestrictedRequestorDept = (dept) =>
       RESTRICTED_REQUESTOR_PREFIXES.some(p => dept?.startsWith(p)) ||
       RESTRICTED_REQUESTOR_EXACT.has(dept);
@@ -285,8 +285,8 @@ class RequestService {
 
   async getFilterOptions(user) {
     const { role, empId, dept: userDept } = user;
-    const RESTRICTED_REQUESTOR_PREFIXES = ["Operations-", "Academics-"];
-    const RESTRICTED_REQUESTOR_EXACT    = new Set(["Game Development", "Software", "Animation", "Management"]);
+    const RESTRICTED_REQUESTOR_PREFIXES = ["Operations-", "Academics-", "Stores-"];
+    const RESTRICTED_REQUESTOR_EXACT    = new Set(["Game Development", "Software", "Animation", "Management", "HR", "Purchase"]);
     const isRestrictedRequestorDept = (dept) =>
       RESTRICTED_REQUESTOR_PREFIXES.some(p => dept?.startsWith(p)) ||
       RESTRICTED_REQUESTOR_EXACT.has(dept);
