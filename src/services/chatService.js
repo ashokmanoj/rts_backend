@@ -40,11 +40,12 @@ class ChatService {
     const data = {
       requestId,
       authorId: user.empId,
-      author: user.name,
-      role: user.role,
-      type: type || "message",
-      text: text || "",
-      replyTo: replyTo || null,
+      author:   user.name,
+      role:     user.role,
+      dept:     user.dept   ?? null,
+      type:     type || "message",
+      text:     text || "",
+      replyTo:  replyTo || null,
     };
 
     if (uploadedFile) {
