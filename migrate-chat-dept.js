@@ -19,8 +19,8 @@ async function main() {
   // Collect unique authorIds
   const authorIds = [...new Set(messages.map(m => m.authorId))];
 
-  // Fetch employees in one query
-  const employees = await prisma.employee.findMany({
+  // Fetch users in one query
+  const employees = await prisma.user.findMany({
     where: { empId: { in: authorIds } },
     select: { empId: true, dept: true },
   });
