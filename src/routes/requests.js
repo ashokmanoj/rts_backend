@@ -51,8 +51,8 @@ router.patch("/:id/acknowledge", authorizeRequestAccess, ctrl.acknowledge);
 // DeptHOD: stop recurring schedule
 router.patch("/:id/stop-recurring", authorizeRequestAccess, ctrl.stopRecurring);
 
-// Close request (optional file)
-router.patch("/:id/close", upload.single("file"), authorizeRequestAccess, ctrl.close);
+// Close request (optional multiple files)
+router.patch("/:id/close", upload.array("files", 10), authorizeRequestAccess, ctrl.close);
 
 // SuperUser only: edit or delete a request
 router.patch("/:id/edit",   authorize("SuperUser"), ctrl.editRequest);

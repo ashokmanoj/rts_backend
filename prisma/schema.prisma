@@ -147,6 +147,11 @@ model Request {
   assignedPersonEmpId String?   @map("assigned_person_emp_id")
   assignedPersonName  String?   @map("assigned_person_name")
 
+  // CC (Copy To) — receives the ticket, can view and chat, cannot take action
+  ccDepts       String?   @map("cc_depts")
+  ccEmpIds      String?   @map("cc_emp_ids")
+  ccPersonNames String?   @map("cc_person_names")
+
   // Checking deadline (set when someone clicks Checking)
   checkingDeadline    DateTime? @map("checking_deadline")
   checkingReason      String?   @map("checking_reason")
@@ -194,6 +199,8 @@ model CloseTicket {
   description String?
   fileUrl     String?  @map("file_url")
   fileName    String?  @map("file_name")
+  fileUrls    String?  @map("file_urls")
+  fileNames   String?  @map("file_names")
   closedDate  DateTime @default(now()) @map("closed_date")
 
   request Request @relation(fields: [requestId], references: [id], onDelete: Cascade)

@@ -81,7 +81,7 @@ async function markUnread(req, res, next) {
 
 async function close(req, res, next) {
   try {
-    const result = await requestService.close(Number(req.params.id), req.user, req.body, req.file, req);
+    const result = await requestService.close(Number(req.params.id), req.user, req.body, req.files, req);
     res.json(result);
   } catch (err) {
     if (err.message.includes("not found"))    return res.status(404).json({ error: err.message });

@@ -73,6 +73,8 @@ class RequestService {
           OR: [
             { empId },
             { assignedPersonEmpId: { contains: empId } },
+            { ccDepts:  { contains: userDept } },
+            { ccEmpIds: { contains: empId } },
           ],
         };
       } else {
@@ -84,50 +86,42 @@ class RequestService {
             { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }] },
             { assignedPersonEmpId: { contains: empId } },
             { assignedDepts: { contains: userDept } },
+            { ccDepts:  { contains: userDept } },
+            { ccEmpIds: { contains: empId } },
           ],
         };
       }
     } else if (role === "DeptHOD") {
-      // DeptHOD sees:
-      //   1. Own requests
-      //   2. External incoming: other dept → their dept  (assignedDept = userDept, dept ≠ userDept)
-      //   3. Self-targeted: user targets their own dept  (dept = userDept AND assignedDept = userDept)
-      //   4. Forwarding chain
-      // Does NOT see: outgoing from their dept to other depts (dept = userDept, assignedDept ≠ userDept)
       roleFilter = { OR: [
         { AND: [{ empId }, { dept: userDept }] },
         { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }] },
         { AND: [{ dept: userDept }, { assignedDept: userDept }] },
         { assignedDepts: { contains: userDept } },
+        { ccDepts:  { contains: userDept } },
+        { ccEmpIds: { contains: empId } },
       ] };
     } else if (role === "RM") {
       roleFilter = {
         OR: [
-          // Own requests submitted from this dept only (prevents cross-dept bleed for multi-role users)
           { AND: [{ empId }, { dept: userDept }] },
-          // Own dept direct reports (outgoing requests)
           { AND: [{ owner: { rmEmpId: empId } }, { dept: userDept }] },
-          // Incoming from other depts (current assignedDept)
           { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }] },
-          // Tracking — incoming forwarded away: all dept RMs can track (dept ≠ userDept)
           { AND: [{ assignedDepts: { contains: userDept } }, { dept: { not: userDept } }] },
-          // Tracking — outgoing forwarded away: only the specific RM sees their direct report's request
           { AND: [{ owner: { rmEmpId: empId } }, { assignedDepts: { contains: userDept } }] },
+          { ccDepts:  { contains: userDept } },
+          { ccEmpIds: { contains: empId } },
         ],
       };
     } else if (role === "HOD") {
       roleFilter = {
         OR: [
-          // Own requests submitted from this dept only
           { AND: [{ empId }, { dept: userDept }] },
-          // Own dept direct reports (outgoing requests)
           { AND: [{ owner: { hodEmpId: empId } }, { dept: userDept }] },
-          // Incoming from other depts
           { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }] },
-          // Tracking — incoming forwarded away: all dept HODs can track
           { AND: [{ assignedDepts: { contains: userDept } }, { dept: { not: userDept } }] },
-          // Tracking — outgoing forwarded away: only the specific HOD sees their direct report's request
           { AND: [{ owner: { hodEmpId: empId } }, { assignedDepts: { contains: userDept } }] },
+          { ccDepts:  { contains: userDept } },
+          { ccEmpIds: { contains: empId } },
         ],
       };
     } else {
@@ -136,6 +130,8 @@ class RequestService {
         OR: [
           { empId },
           { assignedPersonEmpId: { contains: empId } },
+          { ccDepts:  { contains: userDept } },
+          { ccEmpIds: { contains: empId } },
         ],
       };
     }
@@ -300,6 +296,8 @@ class RequestService {
           OR: [
             { empId },
             { assignedPersonEmpId: { contains: empId } },
+            { ccDepts:  { contains: userDept } },
+            { ccEmpIds: { contains: empId } },
           ],
         };
       } else {
@@ -309,6 +307,8 @@ class RequestService {
             { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }] },
             { assignedPersonEmpId: { contains: empId } },
             { assignedDepts: { contains: userDept } },
+            { ccDepts:  { contains: userDept } },
+            { ccEmpIds: { contains: empId } },
           ],
         };
       }
@@ -318,6 +318,8 @@ class RequestService {
         { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }] },
         { AND: [{ dept: userDept }, { assignedDept: userDept }] },
         { assignedDepts: { contains: userDept } },
+        { ccDepts:  { contains: userDept } },
+        { ccEmpIds: { contains: empId } },
       ] };
     } else if (role === "RM") {
       roleFilter = {
@@ -327,6 +329,8 @@ class RequestService {
           { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }] },
           { AND: [{ assignedDepts: { contains: userDept } }, { dept: { not: userDept } }] },
           { AND: [{ owner: { rmEmpId: empId } }, { assignedDepts: { contains: userDept } }] },
+          { ccDepts:  { contains: userDept } },
+          { ccEmpIds: { contains: empId } },
         ],
       };
     } else if (role === "HOD") {
@@ -337,14 +341,17 @@ class RequestService {
           { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }] },
           { AND: [{ assignedDepts: { contains: userDept } }, { dept: { not: userDept } }] },
           { AND: [{ owner: { hodEmpId: empId } }, { assignedDepts: { contains: userDept } }] },
+          { ccDepts:  { contains: userDept } },
+          { ccEmpIds: { contains: empId } },
         ],
       };
     } else {
-      // Interns and any other non-privileged roles: own + assigned only
       roleFilter = {
         OR: [
           { empId },
           { assignedPersonEmpId: { contains: empId } },
+          { ccDepts:  { contains: userDept } },
+          { ccEmpIds: { contains: empId } },
         ],
       };
     }
@@ -370,7 +377,7 @@ class RequestService {
   }
 
   async create(user, data, uploadedFiles, req) {
-    const { purpose, description, assignedDept, assignedDepts, dueDate, assignedPersonEmpId, assignedPersonName, isRecurring, recurringInterval } = data;
+    const { purpose, description, assignedDept, assignedDepts, dueDate, assignedPersonEmpId, assignedPersonName, ccDepts, ccEmpIds, ccPersonNames, isRecurring, recurringInterval } = data;
 
     const files = Array.isArray(uploadedFiles) ? uploadedFiles : (uploadedFiles ? [uploadedFiles] : []);
     const first = files[0] ?? null;
@@ -394,6 +401,9 @@ class RequestService {
         dueDate:             dueDate ? new Date(dueDate) : null,
         assignedPersonEmpId: assignedPersonEmpId || null,
         assignedPersonName:  Array.isArray(assignedPersonName) ? (assignedPersonName[0] || null) : (assignedPersonName || null),
+        ccDepts:      ccDepts      || null,
+        ccEmpIds:     ccEmpIds     || null,
+        ccPersonNames: ccPersonNames || null,
         isRecurring:         recurring,
         recurringInterval:   recurring ? (recurringInterval || null) : null,
         nextRecurringDate:   nextDate,
@@ -560,7 +570,7 @@ class RequestService {
     return formatRequest(updated, user.empId);
   }
 
-  async close(reqId, user, body, uploadedFile, req) {
+  async close(reqId, user, body, uploadedFiles, req) {
     const { note } = body;
     const existing = await prisma.request.findUnique({ where: { id: reqId } });
     if (!existing) throw new Error("Request not found.");
@@ -574,12 +584,16 @@ class RequestService {
       isSpecificallyAssigned;
     if (!canClose) throw new Error("Not authorized to close.");
 
-    const now = new Date();
-    const fUrl = uploadedFile ? this.buildFileUrl(req, uploadedFile.filename) : null;
-    const fName = uploadedFile ? uploadedFile.originalname : null;
-    const isImg = uploadedFile ? uploadedFile.mimetype.startsWith("image/") : false;
+    const now   = new Date();
+    const files = Array.isArray(uploadedFiles) ? uploadedFiles : (uploadedFiles ? [uploadedFiles] : []);
+    const first = files[0] ?? null;
+    const fUrl   = first ? this.buildFileUrl(req, first.filename)  : null;
+    const fName  = first ? first.originalname                      : null;
+    const isImg  = first ? first.mimetype.startsWith("image/")     : false;
+    const fUrls  = files.length > 0 ? JSON.stringify(files.map(f => this.buildFileUrl(req, f.filename))) : null;
+    const fNames = files.length > 0 ? JSON.stringify(files.map(f => f.originalname))                     : null;
 
-    await prisma.closeTicket.create({ data: { requestId: reqId, description: note || "No reason", fileUrl: fUrl, fileName: fName, closedDate: now } });
+    await prisma.closeTicket.create({ data: { requestId: reqId, description: note || "No reason", fileUrl: fUrl, fileName: fName, fileUrls: fUrls, fileNames: fNames, closedDate: now } });
     await prisma.requestRead.deleteMany({ where: { requestId: reqId, empId: { not: user.empId } } });
     await prisma.requestRead.upsert({ where: { requestId_empId: { requestId: reqId, empId: user.empId } }, update: {}, create: { requestId: reqId, empId: user.empId } });
 

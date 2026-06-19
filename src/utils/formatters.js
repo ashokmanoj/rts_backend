@@ -72,6 +72,10 @@ function formatRequest(row, viewerEmpId) {
     assignedPersonEmpId: row.assignedPersonEmpId  ?? null,
     assignedPersonName:  row.assignedPersonName   ?? null,
 
+    ccDepts:       row.ccDepts       ?? null,
+    ccEmpIds:      row.ccEmpIds      ?? null,
+    ccPersonNames: row.ccPersonNames ?? null,
+
     // Closure
     status:         row.resolvedDate       ? "Closed" : "Open",
     assignedStatus: row.assignedStatus,
@@ -83,6 +87,8 @@ function formatRequest(row, viewerEmpId) {
       description: row.closeTicket.description,
       fileUrl:     row.closeTicket.fileUrl,
       fileName:    row.closeTicket.fileName,
+      fileUrls:  (() => { if (row.closeTicket.fileUrls)  { try { return JSON.parse(row.closeTicket.fileUrls);  } catch { return null; } } return row.closeTicket.fileUrl  ? [row.closeTicket.fileUrl]  : null; })(),
+      fileNames: (() => { if (row.closeTicket.fileNames) { try { return JSON.parse(row.closeTicket.fileNames); } catch { return null; } } return row.closeTicket.fileName ? [row.closeTicket.fileName] : null; })(),
       closedDate:  pad(row.closeTicket.closedDate),
     } : null,
 
