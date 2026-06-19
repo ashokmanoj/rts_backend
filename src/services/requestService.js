@@ -925,7 +925,11 @@ class RequestService {
   }
 
   async markSeen(requestId, empId) {
-    return prisma.requestRead.upsert({ where: { requestId_empId: { requestId, empId } }, update: {}, create: { requestId, empId } });
+    return prisma.requestRead.upsert({
+      where:  { requestId_empId: { requestId, empId } },
+      update: { createdAt: new Date() },
+      create: { requestId, empId },
+    });
   }
 
   async markUnread(requestId, empId) {

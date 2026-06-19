@@ -119,8 +119,13 @@ function formatRequest(row, viewerEmpId) {
     // GN-route: requestor's RM or HOD is GN-01 or GN-02 → goes to Management portal
     isGnRoute: !!(["GN-01", "GN-02"].includes(row.owner?.rmEmpId) || ["GN-01", "GN-02"].includes(row.owner?.hodEmpId)),
 
-    // Read tracking
-    seen: row.readReceipts ? row.readReceipts.some(r => r.empId === viewerEmpId) : false,
+    // Read tracking — if reopened, only count receipts created AFTER the reopen timestamp
+    seen: row.readReceipts
+      ? row.readReceipts.some(r =>
+          r.empId === viewerEmpId &&
+          (!row.reopenedAt || new Date(r.createdAt) > new Date(row.reopenedAt))
+        )
+      : false,
 
     chatMessages:   row.chatMessages ? row.chatMessages.map(formatMessage) : [],
 
