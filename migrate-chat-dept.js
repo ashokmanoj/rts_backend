@@ -10,7 +10,7 @@ const prisma = new PrismaClient();
 async function main() {
   // Find all chat messages with null dept that have an authorId we can look up
   const messages = await prisma.chatMessage.findMany({
-    where: { dept: null, authorId: { not: null } },
+    where: { dept: null },
     select: { id: true, authorId: true, author: true, role: true },
   });
 
