@@ -889,8 +889,15 @@ class RequestService {
 
   async getUsersByDept(depts) {
     const deptList = Array.isArray(depts) ? depts : [depts];
+    const ASSIGNABLE_ROLES = ["RM", "HOD", "DeptHOD"];
     const users = await prisma.user.findMany({
-      where:   { dept: { in: deptList }, isActive: true },
+      where: {
+        isActive: true,
+        OR: [
+          { dept: { in: deptList } },
+          { userRoles: { some: { dept: { in: deptList }, role: { in: ASSIGNABLE_ROLES } } } },
+        ],
+      },
       select:  { empId: true, name: true, dept: true, designation: true, role: true, userRoles: { select: { role: true, dept: true } } },
       orderBy: { name: "asc" },
     });
@@ -980,22 +987,30 @@ class RequestService {
     return users;
   }
 
-  async broadcastSend(user, body) {
+  async broadcastSend(user, body, uploadedFiles = [], req) {
     const ALLOWED_DEPTS = ["HR", "Food Committee", "TA Committee", "RTS Help Desk"];
     if (user.role !== "DeptHOD" || !ALLOWED_DEPTS.includes(user.dept)) {
       throw Object.assign(new Error("Not authorized."), { status: 403 });
     }
 
-    const { title, description, sendToAll, targetDepts, targetLocations, targetEmpIds } = body;
+    // Normalize FormData fields (values may come as strings or arrays from multipart)
+    const normArr  = v => !v ? [] : Array.isArray(v) ? v : [v];
+    const title       = Array.isArray(body.title)       ? body.title[0]       : body.title;
+    const description = Array.isArray(body.description) ? body.description[0] : body.description;
+    const sendToAll   = body.sendToAll === "true" || body.sendToAll === true;
+    const targetDepts     = normArr(body.targetDepts);
+    const targetLocations = normArr(body.targetLocations);
+    const targetEmpIds    = normArr(body.targetEmpIds);
+
     if (!title?.trim()) throw Object.assign(new Error("Title is required."), { status: 400 });
 
     const baseWhere = { isActive: true, empId: { not: user.empId } };
 
     if (!sendToAll) {
       const orFilters = [];
-      if (targetDepts?.length)     orFilters.push({ dept:     { in: targetDepts } });
-      if (targetLocations?.length) orFilters.push({ location: { in: targetLocations } });
-      if (targetEmpIds?.length)    orFilters.push({ empId:    { in: targetEmpIds } });
+      if (targetDepts.length)     orFilters.push({ dept:     { in: targetDepts } });
+      if (targetLocations.length) orFilters.push({ location: { in: targetLocations } });
+      if (targetEmpIds.length)    orFilters.push({ empId:    { in: targetEmpIds } });
       if (!orFilters.length) throw Object.assign(new Error("Select at least one target."), { status: 400 });
       baseWhere.OR = orFilters;
     }
@@ -1007,7 +1022,13 @@ class RequestService {
 
     if (!targets.length) throw Object.assign(new Error("No users matched the selection."), { status: 400 });
 
-    const now = new Date();
+    const now   = new Date();
+    const files = Array.isArray(uploadedFiles) ? uploadedFiles : (uploadedFiles ? [uploadedFiles] : []);
+    const first = files[0] ?? null;
+    const fUrl   = first ? this.buildFileUrl(req, first.filename)                             : null;
+    const fName  = first ? first.originalname                                                  : null;
+    const fUrls  = files.length > 0 ? JSON.stringify(files.map(f => this.buildFileUrl(req, f.filename))) : null;
+    const fNames = files.length > 0 ? JSON.stringify(files.map(f => f.originalname))         : null;
 
     await prisma.request.createMany({
       data: targets.map(t => ({
@@ -1025,6 +1046,10 @@ class RequestService {
         assignedStatus:      "Broadcast",
         deptHodStatus:       "Approved",
         deptHodDate:         now,
+        fileUrl:  fUrl,
+        fileName: fName,
+        fileUrls: fUrls,
+        fileNames: fNames,
       })),
     });
 

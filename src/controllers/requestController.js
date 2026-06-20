@@ -189,7 +189,7 @@ async function broadcastUsers(req, res, next) {
 
 async function broadcastSend(req, res, next) {
   try {
-    const result = await requestService.broadcastSend(req.user, req.body);
+    const result = await requestService.broadcastSend(req.user, req.body, req.files || [], req);
     res.json(result);
   } catch (err) {
     if (err.status === 403) return res.status(403).json({ error: err.message });

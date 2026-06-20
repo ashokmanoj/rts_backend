@@ -26,7 +26,7 @@ router.get("/locations", ctrl.getLocations);
 
 // Broadcast Send — DeptHOD of HR / Food Committee / TA Committee / RTS Help Desk
 router.get("/broadcast-users", ctrl.broadcastUsers);
-router.post("/broadcast-send", ctrl.broadcastSend);
+router.post("/broadcast-send", upload.array("files", 10), ctrl.broadcastSend);
 
 // ── Management Portal: HOD-pending requests & HOD-level approval ──────────
 router.get("/hod-pending", authorize("Management"), ctrl.getHodPending);
