@@ -26,6 +26,8 @@ async function sendFcmToUser(empId, payload) {
             url:        payload.url                          || "/",
             type:       payload.type                        || "general",
             tag:        payload.tag                         || "",
+            badge:      payload.badge                       || "",
+            icon:       payload.icon                        || "",
             action:     payload.data?.action                || "general",
             channel_id: payload.data?.channel_id            || "rts_notifications",
             request_id: String(payload.data?.requestId      || ""),
@@ -37,6 +39,7 @@ async function sendFcmToUser(empId, payload) {
             notification: {
               sound:     "default",
               channelId: payload.data?.channel_id || "rts_notifications",
+              icon:      payload.icon || "rtsLogo"
             },
             priority: "high",
           },

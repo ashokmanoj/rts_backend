@@ -63,6 +63,7 @@ model User {
   requests          Request[]          @relation("RequestOwner")
   messages          ChatMessage[]      @relation("MessageSender")
   readReceipts      RequestRead[]
+  chatReads         ChatRead[]
   loginLogs         LoginLog[]
   foodSubscription  FoodSubscription?
   foodCancellations FoodCancellation[]
@@ -174,6 +175,7 @@ model Request {
   chatMessages ChatMessage[]
   closeTicket  CloseTicket?
   readReceipts RequestRead[]
+  chatReads    ChatRead[]
 
   @@index([empId])
   @@index([assignedDept])
@@ -191,6 +193,18 @@ model RequestRead {
 
   @@unique([requestId, empId])
   @@map("request_reads")
+}
+
+model ChatRead {
+  requestId  Int      @map("request_id")
+  empId      String   @map("emp_id")
+  lastReadAt DateTime @default(now()) @map("last_read_at")
+
+  request Request @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [empId],    references: [empId], onDelete: Cascade)
+
+  @@id([requestId, empId])
+  @@map("chat_reads")
 }
 
 model CloseTicket {

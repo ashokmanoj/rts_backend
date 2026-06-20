@@ -18,6 +18,8 @@ const foodRoutes        = require("./routes/food");
 const fileRoutes        = require("./routes/files");
 const pushRoutes        = require("./routes/push");
 const managementRoutes  = require("./routes/management");
+const { authenticate }  = require("./middleware/auth");
+const { heartbeat }     = require("./controllers/chatController");
 
 const app = express();
 app.set('trust proxy', 1); // Trust one hop (IIS reverse proxy) — prevents X-Forwarded-For spoofing
@@ -108,6 +110,9 @@ app.use("/api/food",       foodRoutes);
 app.use("/api/files",      fileRoutes);
 app.use("/api/push",       pushRoutes);
 app.use("/api/management", managementRoutes);
+
+// Heartbeat — lightweight ping to track online presence for chat tick marks
+app.post("/api/users/heartbeat", authenticate, heartbeat);
 
 // ── Health check ──────────────────────────────────────────────────────────────
 app.get("/api/health", (_req, res) =>

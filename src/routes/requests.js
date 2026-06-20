@@ -66,4 +66,7 @@ router.get("/:id/chat", authorizeRequestAccess, chatCtrl.getMessages);
 // Send message (file/voice optional)
 router.post("/:id/chat", upload.single("file"), authorizeRequestAccess, chatCtrl.sendMessage);
 
+// Mark chat as read (updates tick receipts)
+router.post("/:id/chat/read", authorizeRequestAccess, chatCtrl.markChatRead);
+
 module.exports = router;
