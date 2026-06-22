@@ -105,7 +105,7 @@ async function authorizeRequestAccess(req, res, next) {
   try {
     const request = await prisma.request.findUnique({
       where: { id: requestId },
-      select: { empId: true, dept: true, assignedDept: true, assignedDepts: true, assignedPersonEmpId: true, rmStatus: true, hodStatus: true, deptHodStatus: true, checkingBy: true }
+      select: { empId: true, dept: true, assignedDept: true, assignedDepts: true, assignedPersonEmpId: true, rmStatus: true, hodStatus: true, deptHodStatus: true, checkingBy: true, ccEmpIds: true, ccDepts: true }
     });
 
     if (!request) return res.status(404).json({ error: "Request not found." });
@@ -172,6 +172,11 @@ async function authorizeRequestAccess(req, res, next) {
       const ids = reqPersonIds.split(",").map(s => s.trim()).filter(Boolean);
       if (ids.includes(empId)) return next();
     }
+
+    // CC user (by empId or dept) — can view and mark as seen
+    const ccEmpIdList = (request.ccEmpIds || "").split(",").map(s => s.trim()).filter(Boolean);
+    const ccDeptList  = (request.ccDepts  || "").split(",").map(s => s.trim()).filter(Boolean);
+    if (ccEmpIdList.includes(empId) || (userDept && ccDeptList.includes(userDept))) return next();
 
     // Only non-restricted regular staff can see incoming requests assigned to their dept
     const deptOwnOnly = ["Academics", "Animation", "Software"];

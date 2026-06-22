@@ -510,7 +510,11 @@ class RequestService {
       }
     }
 
-    await prisma.requestRead.deleteMany({ where: { requestId: reqId, empId: { not: user.empId } } });
+    // Preserve CC users' read receipts — approval steps don't need to re-alert observers
+    const _ccApproval = existing.ccEmpIds ? existing.ccEmpIds.split(",").map(s => s.trim()).filter(Boolean) : [];
+    await prisma.requestRead.deleteMany({
+      where: { requestId: reqId, empId: { notIn: [user.empId, ..._ccApproval] } },
+    });
     await prisma.requestRead.upsert({ where: { requestId_empId: { requestId: reqId, empId: user.empId } }, update: {}, create: { requestId: reqId, empId: user.empId } });
 
     const updated = await prisma.request.update({ where: { id: reqId }, data: updateData, include: WITH_OWNER });
@@ -594,7 +598,11 @@ class RequestService {
     const fNames = files.length > 0 ? JSON.stringify(files.map(f => f.originalname))                     : null;
 
     await prisma.closeTicket.create({ data: { requestId: reqId, description: note || "No reason", fileUrl: fUrl, fileName: fName, fileUrls: fUrls, fileNames: fNames, closedDate: now } });
-    await prisma.requestRead.deleteMany({ where: { requestId: reqId, empId: { not: user.empId } } });
+    // Preserve CC users' read receipts — close action doesn't need to re-alert observers
+    const _ccClose = existing.ccEmpIds ? existing.ccEmpIds.split(",").map(s => s.trim()).filter(Boolean) : [];
+    await prisma.requestRead.deleteMany({
+      where: { requestId: reqId, empId: { notIn: [user.empId, ..._ccClose] } },
+    });
     await prisma.requestRead.upsert({ where: { requestId_empId: { requestId: reqId, empId: user.empId } }, update: {}, create: { requestId: reqId, empId: user.empId } });
 
     const updated = await prisma.request.update({
@@ -795,7 +803,11 @@ class RequestService {
 
     const now = new Date();
 
-    await prisma.requestRead.deleteMany({ where: { requestId: reqId, empId: { not: user.empId } } });
+    // Preserve CC users' read receipts — HOD approval doesn't need to re-alert observers
+    const _ccHod = existing.ccEmpIds ? existing.ccEmpIds.split(",").map(s => s.trim()).filter(Boolean) : [];
+    await prisma.requestRead.deleteMany({
+      where: { requestId: reqId, empId: { notIn: [user.empId, ..._ccHod] } },
+    });
     await prisma.requestRead.upsert({
       where: { requestId_empId: { requestId: reqId, empId: user.empId } },
       update: {},
