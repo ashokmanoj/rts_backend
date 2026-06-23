@@ -12,5 +12,6 @@ module.exports = {
   MANAGEMENT: "Management",
   ADMIN: "Admin",
   HR: "HR",
-  FOOD_COMMITTEE: "FoodCommittee"
+  FOOD_COMMITTEE: "FoodCommittee",
+  VIEW_CLOSE_TICKET: "ViewCloseTicket"
 };
