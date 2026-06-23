@@ -124,6 +124,16 @@ class RequestService {
           { ccEmpIds: { contains: empId } },
         ],
       };
+    } else if (role === "ViewCloseTicket") {
+      // Only requests assigned to this user's specific dept
+      roleFilter = {
+        OR: [
+          { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }] },
+          { assignedDepts: { contains: userDept } },
+          { ccDepts: { contains: userDept } },
+          { ccEmpIds: { contains: empId } },
+        ],
+      };
     } else {
       // Interns and any other non-privileged roles: own + assigned only
       roleFilter = {
@@ -342,6 +352,15 @@ class RequestService {
           { AND: [{ assignedDepts: { contains: userDept } }, { dept: { not: userDept } }] },
           { AND: [{ owner: { hodEmpId: empId } }, { assignedDepts: { contains: userDept } }] },
           { ccDepts:  { contains: userDept } },
+          { ccEmpIds: { contains: empId } },
+        ],
+      };
+    } else if (role === "ViewCloseTicket") {
+      roleFilter = {
+        OR: [
+          { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }] },
+          { assignedDepts: { contains: userDept } },
+          { ccDepts: { contains: userDept } },
           { ccEmpIds: { contains: empId } },
         ],
       };
