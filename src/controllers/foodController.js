@@ -125,6 +125,25 @@ async function downloadReport(req, res, next) {
   } catch (err) { next(err); }
 }
 
+async function addManualEntry(req, res, next) {
+  try {
+    const { empId, weekDate, amount, note } = req.body;
+    if (!empId || !weekDate || amount == null)
+      return res.status(400).json({ error: "empId, weekDate, and amount are required." });
+    const result = await foodService.addManualEntry(req.user, { empId, weekDate, amount, note });
+    res.json(result);
+  } catch (err) {
+    if (err.status === 404) return res.status(404).json({ error: err.message });
+    next(err);
+  }
+}
+
+async function getUsers(req, res, next) {
+  try {
+    res.json(await foodService.getUsers());
+  } catch (err) { next(err); }
+}
+
 async function adminGetAll(req, res, next) {
   try { res.json(await foodService.getAllSubscriptions()); }
   catch (err) { next(err); }
@@ -162,5 +181,6 @@ module.exports = {
   enableNextWeekOnly, undoEnableNextWeek,
   enableYear, disableYear,
   getCalendar, getReport, downloadReport,
+  addManualEntry, getUsers,
   adminGetAll, adminSubscribe, adminToggle, adminDelete,
 };

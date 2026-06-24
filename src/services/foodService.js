@@ -193,22 +193,55 @@ class FoodService {
     const endDate   = new Date(year, month, 0);
 
     const sub = await prisma.foodSubscription.findUnique({ where: { empId } });
+
+    // Expand the lookup start by 6 days so weeks whose Monday falls in the
+    // previous month are still caught (a week spans at most 6 days across a boundary).
+    const weekQueryStart = new Date(startDate);
+    weekQueryStart.setDate(weekQueryStart.getDate() - 6);
+
+    // Extend to show the full last week of the month (billing clarity).
+    // If the month ends on e.g. Tuesday, we show Wed–Sun of the next month too
+    // because those days are billed to THIS month (week's Monday is in this month).
+    const lastDow     = endDate.getDay(); // 0=Sun, 1=Mon … 6=Sat
+    const extraDays   = lastDow === 0 ? 0 : 7 - lastDow;
+    const displayEnd  = new Date(endDate);
+    displayEnd.setDate(displayEnd.getDate() + extraDays);
+
     const cancellations = await prisma.foodCancellation.findMany({
-      where: { empId, weekStartDate: { gte: startDate, lte: endDate } },
+      where: { empId, weekStartDate: { gte: weekQueryStart, lte: displayEnd } },
     });
     const holidays = await prisma.holiday.findMany({
-      where: { date: { gte: startDate, lte: endDate } },
+      where: { date: { gte: startDate, lte: displayEnd } },
     });
 
-    const days        = [];
-    const curr        = new Date(startDate);
-    const suspDateStr = sub?.suspendedFrom ? toDateString(new Date(sub.suspendedFrom)) : null;
-    const subStartStr = sub?.startDate     ? toDateString(new Date(sub.startDate))     : null;
+    // Manual entries — expanded range covers cross-month weeks in both directions
+    let manualEntries = [];
+    if (prisma.foodManualEntry) {
+      try {
+        manualEntries = await prisma.foodManualEntry.findMany({
+          where: { empId, weekStartDate: { gte: weekQueryStart, lte: displayEnd } },
+        });
+      } catch { /* table not yet migrated */ }
+    }
+    const manualWeeks = new Set(manualEntries.map(e => toDateString(new Date(e.weekStartDate))));
 
-    while (curr <= endDate) {
-      const dateStr    = toDateString(curr);
-      const dayOfWeek  = curr.getDay();
+    const days           = [];
+    const curr           = new Date(startDate);
+    const suspDateStr    = sub?.suspendedFrom ? toDateString(new Date(sub.suspendedFrom)) : null;
+    const subStartStr    = sub?.startDate     ? toDateString(new Date(sub.startDate))     : null;
+    const monthStartStr  = toDateString(startDate);
+
+    while (curr <= displayEnd) {
+      const dateStr      = toDateString(curr);
+      const dayOfWeek    = curr.getDay();
       const weekStartStr = toDateString(getMondayOfCurrentWeek(curr));
+
+      // Days from the next calendar month whose Monday is still in THIS month
+      // → they're billed to this month, shown with "next-week" style.
+      const isNextMonthDay  = curr > endDate;
+      // Days at the start of this month whose Monday was in the PREVIOUS month
+      // → billed to the previous month, shown with "other-week" style.
+      const isPrevMonthWeek = weekStartStr < monthStartStr;
 
       let type = "working";
       let name = null;
@@ -226,19 +259,20 @@ class FoodService {
       }
 
       if (type === "working" || type === "working-saturday") {
-        // Weeks before the subscription start week → inactive
         if (subStartStr && weekStartStr < subStartStr) {
-          type = "inactive";
+          type = manualWeeks.has(weekStartStr) ? "manual" : "inactive";
         } else {
           const isCancelled = cancellations.some(
             c => toDateString(new Date(c.weekStartDate)) === weekStartStr
           );
           if (isCancelled) {
             type = "cancelled";
-          } else if (!sub?.isActive) {
-            type = "inactive";
-          } else if (suspDateStr && dateStr >= suspDateStr) {
-            type = "inactive";
+          } else if (!sub?.isActive || (suspDateStr && dateStr >= suspDateStr)) {
+            type = manualWeeks.has(weekStartStr) ? "manual" : "inactive";
+          } else if (isPrevMonthWeek) {
+            type = "other-week";
+          } else if (isNextMonthDay) {
+            type = "next-week";
           }
         }
       }
@@ -247,16 +281,27 @@ class FoodService {
       curr.setDate(curr.getDate() + 1);
     }
 
+    // Count working days for THIS month: regular + next-week overflow (both billed here)
+    // "other-week" days are excluded (billed to previous month)
     const workingDaysCount = days.filter(
-      d => d.type === "working" || d.type === "working-saturday"
+      d => d.type === "working" || d.type === "working-saturday" || d.type === "next-week"
     ).length;
 
+    // Only count the amount for manual entries whose week STARTS in this month.
+    // Cross-month weeks (weekStart in prev month) show green days here but their
+    // amount belongs to that previous month's calendar — don't double-count.
+    const thisMonthManualEntries = manualEntries.filter(
+      e => new Date(e.weekStartDate) >= startDate
+    );
+    const manualAmount = thisMonthManualEntries.reduce((sum, e) => sum + e.amount, 0);
+
     return {
-      isActive:     sub?.isActive || false,
-      subscribed:   !!sub,
+      isActive:      sub?.isActive || false,
+      subscribed:    !!sub || manualEntries.length > 0,
       suspendedFrom: sub?.suspendedFrom,
-      workingDays:  workingDaysCount,
-      totalAmount:  workingDaysCount * 30,
+      workingDays:   workingDaysCount,
+      totalAmount:   workingDaysCount * 30 + manualAmount,
+      hasManual:     thisMonthManualEntries.length > 0,
       days,
     };
   }
@@ -315,7 +360,72 @@ class FoodService {
       })
       .filter(Boolean);
 
+    // Merge manual entries (guarded — safe until migration + prisma generate are run)
+    if (prisma.foodManualEntry) {
+      try {
+        const manualEntries = await prisma.foodManualEntry.findMany({
+          where: {
+            weekStartDate: { gte: startDate, lte: endDate },
+            ...(deptFilter ? { user: { dept: deptFilter } } : {}),
+          },
+          include: { user: true },
+        });
+
+        for (const entry of manualEntries) {
+          const idx = reportData.findIndex(r => r.empId === entry.empId);
+          if (idx >= 0) {
+            reportData[idx].totalAmount += entry.amount;
+            reportData[idx].hasManual   = true;
+          } else {
+            reportData.push({
+              name:        entry.user.name,
+              empId:       entry.empId,
+              dept:        entry.user.dept,
+              location:    entry.user.location,
+              period:      periodName,
+              workingDays: null,
+              totalAmount: entry.amount,
+              isManual:    true,
+            });
+          }
+        }
+      } catch { /* table not yet created — run SQL migration */ }
+    }
+
     return { period: periodName, data: reportData };
+  }
+
+  // ── Manual entry — add user to food for a specific week ──────────────────
+
+  async addManualEntry(adder, { empId, weekDate, amount, note }) {
+    const user = await prisma.user.findUnique({ where: { empId } });
+    if (!user) throw Object.assign(new Error("User not found."), { status: 404 });
+
+    const d    = new Date(weekDate);
+    d.setHours(0, 0, 0, 0);
+    const day  = d.getDay();
+    const diff = day === 0 ? -6 : 1 - day;
+    const monday = new Date(d);
+    monday.setDate(d.getDate() + diff);
+    monday.setHours(0, 0, 0, 0);
+
+    if (!prisma.foodManualEntry) throw Object.assign(new Error("Manual entry not available — run SQL migration and npx prisma generate."), { status: 503 });
+
+    await prisma.foodManualEntry.upsert({
+      where:  { empId_weekStartDate: { empId, weekStartDate: monday } },
+      update: { amount: parseFloat(amount), note: note || null, addedByEmpId: adder.empId, addedByName: adder.name },
+      create: { empId, weekStartDate: monday, amount: parseFloat(amount), note: note || null, addedByEmpId: adder.empId, addedByName: adder.name },
+    });
+
+    return { success: true, weekStart: toDateString(monday), userName: user.name };
+  }
+
+  async getUsers() {
+    return prisma.user.findMany({
+      where:   { isActive: true },
+      select:  { empId: true, name: true, dept: true },
+      orderBy: { name: "asc" },
+    });
   }
 
   // ── SuperUser admin CRUD ──────────────────────────────────────────────────

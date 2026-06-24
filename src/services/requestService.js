@@ -1087,6 +1087,42 @@ class RequestService {
     return { success: true, sentTo: targets.length };
   }
 
+  async attachAfterClose(reqId, user, uploadedFiles, req) {
+    const existing = await prisma.request.findUnique({ where: { id: reqId }, include: { closeTicket: true } });
+    if (!existing) throw Object.assign(new Error("Request not found."), { status: 404 });
+    if (!existing.isClosed || existing.acknowledgement !== "Resolved")
+      throw Object.assign(new Error("Ticket must be closed and acknowledged first."), { status: 400 });
+
+    const isAssignedDept        = existing.assignedDept === user.dept;
+    const isSpecificallyAssigned = existing.assignedPersonEmpId
+      ? existing.assignedPersonEmpId.split(",").map(s => s.trim()).includes(user.empId)
+      : false;
+    if (!isAssignedDept && !isSpecificallyAssigned)
+      throw Object.assign(new Error("Not authorized to attach files."), { status: 403 });
+
+    const files = Array.isArray(uploadedFiles) ? uploadedFiles : (uploadedFiles ? [uploadedFiles] : []);
+    if (!files.length) throw Object.assign(new Error("No files provided."), { status: 400 });
+
+    const newUrls  = files.map(f => this.buildFileUrl(req, f.filename));
+    const newNames = files.map(f => f.originalname);
+
+    // System summary message
+    await prisma.chatMessage.create({
+      data: { requestId: reqId, authorId: user.empId, author: user.name, role: user.role, dept: user.dept, type: "system", text: `📎 ${files.length} file(s) attached after closure by ${user.name} (${user.dept}).` },
+    });
+
+    // Individual file messages — visible only in chat, not in closure details
+    for (let i = 0; i < files.length; i++) {
+      const isImg = /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(newNames[i]);
+      await prisma.chatMessage.create({
+        data: { requestId: reqId, authorId: user.empId, author: user.name, role: user.role, dept: user.dept, type: "file", text: "", fileUrl: newUrls[i], fileName: newNames[i], isImage: isImg },
+      });
+    }
+
+    const updated = await prisma.request.findUnique({ where: { id: reqId }, include: WITH_OWNER });
+    return formatRequest(updated, user.empId);
+  }
+
   async stopRecurring(reqId, user) {
     if (user.role !== "DeptHOD") throw Object.assign(new Error("Only DeptHOD can stop recurring."), { status: 403 });
 

@@ -16,6 +16,8 @@ const {
   getCalendar,
   getReport,
   downloadReport,
+  addManualEntry,
+  getUsers,
   adminGetAll,
   adminSubscribe,
   adminToggle,
@@ -46,6 +48,8 @@ router.post('/disable-year',           disableYear);
 router.get('/calendar',                getCalendar);
 router.get('/report',                  authorizeHODReport, getReport);
 router.get('/report/download',         authorizeHODReport, downloadReport);
+router.get('/admin/users',             authorizeHODReport, getUsers);
+router.post('/admin/manual-entry',     authorizeHODReport, addManualEntry);
 
 // SuperUser admin CRUD
 router.get('/admin/subscriptions',     authorize('SuperUser'), adminGetAll);

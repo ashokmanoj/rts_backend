@@ -54,6 +54,9 @@ router.patch("/:id/stop-recurring", authorizeRequestAccess, ctrl.stopRecurring);
 // Close request (optional multiple files)
 router.patch("/:id/close", upload.array("files", 10), authorizeRequestAccess, ctrl.close);
 
+// Attach files after ticket is closed and acknowledged
+router.patch("/:id/attach-after-close", upload.array("files", 10), authorizeRequestAccess, ctrl.attachAfterClose);
+
 // SuperUser only: edit or delete a request
 router.patch("/:id/edit",   authorize("SuperUser"), ctrl.editRequest);
 router.delete("/:id",       authorize("SuperUser"), ctrl.deleteRequest);

@@ -68,6 +68,7 @@ model User {
   loginLogs         LoginLog[]
   foodSubscription  FoodSubscription?
   foodCancellations FoodCancellation[]
+  foodManualEntries FoodManualEntry[]
   userRoles         UserRole[]
   pushSubscriptions PushSubscription[]
   fcmTokens         FcmToken[]
@@ -275,6 +276,23 @@ model FoodCancellation {
   @@unique([empId, weekStartDate])
   @@index([empId])
   @@map("food_cancellations")
+}
+
+model FoodManualEntry {
+  id            Int      @id @default(autoincrement())
+  empId         String   @map("emp_id")
+  weekStartDate DateTime @map("week_start_date")
+  amount        Float
+  note          String?
+  addedByEmpId  String   @map("added_by_emp_id")
+  addedByName   String   @map("added_by_name")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [empId], references: [empId], onDelete: Cascade)
+
+  @@unique([empId, weekStartDate])
+  @@index([empId])
+  @@map("food_manual_entries")
 }
 
 model Holiday {
