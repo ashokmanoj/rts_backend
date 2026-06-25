@@ -93,7 +93,7 @@ class RequestService {
       }
     } else if (role === "DeptHOD") {
       roleFilter = { OR: [
-        { AND: [{ empId }, { dept: userDept }] },
+        { AND: [{ empId }, { dept: userDept }, { NOT: { requestorRole: 'broadcast' } }] },
         { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }] },
         { AND: [{ dept: userDept }, { assignedDept: userDept }] },
         { assignedDepts: { contains: userDept } },
@@ -324,7 +324,7 @@ class RequestService {
       }
     } else if (role === "DeptHOD") {
       roleFilter = { OR: [
-        { AND: [{ empId }, { dept: userDept }] },
+        { AND: [{ empId }, { dept: userDept }, { NOT: { requestorRole: 'broadcast' } }] },
         { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }] },
         { AND: [{ dept: userDept }, { assignedDept: userDept }] },
         { assignedDepts: { contains: userDept } },
@@ -1061,27 +1061,41 @@ class RequestService {
     const fUrls  = files.length > 0 ? JSON.stringify(files.map(f => this.buildFileUrl(req, f.filename))) : null;
     const fNames = files.length > 0 ? JSON.stringify(files.map(f => f.originalname))         : null;
 
+    const broadcastBase = {
+      empId:          user.empId,
+      purpose:        title.trim(),
+      description:    description?.trim() || null,
+      dept:           user.dept,
+      requestorRole:  "broadcast",
+      isClosed:       true,
+      resolvedDate:   now,
+      resolvedBy:     `${user.name} (Broadcast)`,
+      assignedStatus: "Broadcast",
+      deptHodStatus:  "Approved",
+      deptHodDate:    now,
+      fileUrl:  fUrl,
+      fileName: fName,
+      fileUrls: fUrls,
+      fileNames: fNames,
+    };
+
     await prisma.request.createMany({
       data: targets.map(t => ({
-        empId:               user.empId,
-        purpose:             title.trim(),
-        description:         description?.trim() || null,
-        dept:                user.dept,
+        ...broadcastBase,
         assignedDept:        t.dept,
         assignedPersonEmpId: t.empId,
         assignedPersonName:  t.name,
-        requestorRole:       "broadcast",
-        isClosed:            true,
-        resolvedDate:        now,
-        resolvedBy:          `${user.name} (Broadcast)`,
-        assignedStatus:      "Broadcast",
-        deptHodStatus:       "Approved",
-        deptHodDate:         now,
-        fileUrl:  fUrl,
-        fileName: fName,
-        fileUrls: fUrls,
-        fileNames: fNames,
       })),
+    });
+
+    // One sender-copy so the broadcaster sees exactly one entry in their own request list
+    await prisma.request.create({
+      data: {
+        ...broadcastBase,
+        assignedDept:        user.dept,
+        assignedPersonEmpId: user.empId,
+        assignedPersonName:  user.name,
+      },
     });
 
     return { success: true, sentTo: targets.length };
