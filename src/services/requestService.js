@@ -10,7 +10,7 @@
 const prisma = require("../config/database");
 const { formatRequest } = require("../utils/formatters");
 const { parsePagination, buildPageResponse } = require("../utils/paginate");
-const { sendNewRequestNotification } = require("../utils/pushService");
+const { sendNewRequestNotification, sendPushToUser } = require("../utils/pushService");
 
 const WITH_OWNER = { owner: true, closeTicket: true, chatMessages: true, readReceipts: true };
 
@@ -75,6 +75,7 @@ class RequestService {
             { assignedPersonEmpId: { contains: empId } },
             { ccDepts:  { contains: userDept } },
             { ccEmpIds: { contains: empId } },
+            { requestorRole: 'broadcast' },
           ],
         };
       } else {
@@ -88,6 +89,7 @@ class RequestService {
             { assignedDepts: { contains: userDept } },
             { ccDepts:  { contains: userDept } },
             { ccEmpIds: { contains: empId } },
+            { requestorRole: 'broadcast' },
           ],
         };
       }
@@ -163,33 +165,50 @@ class RequestService {
     if (assignedDepts.length === 1)    extraFilters.push({ assignedDept: assignedDepts[0] });
     else if (assignedDepts.length > 1) extraFilters.push({ assignedDept: { in: assignedDepts } });
 
-    // When either status filter is active, automatically exclude closed tickets
-    if (rmStatuses.length > 0 || deptHodStatuses.length > 0) {
+    // "closed" is a special value that maps to isClosed:true, not a status field.
+    // Strip it out first so the status-clause handlers only see real status values.
+    const rmHasClosed      = rmStatuses.includes("closed");
+    const deptHodHasClosed = deptHodStatuses.includes("closed");
+    const rmActive         = rmStatuses.filter(s => s !== "closed");
+    const deptHodActive    = deptHodStatuses.filter(s => s !== "closed");
+    const hasClosed        = rmHasClosed || deptHodHasClosed;
+    const hasOtherStatuses = rmActive.length > 0 || deptHodActive.length > 0;
+
+    // isClosed guard: only-closed → show closed; only-open filters → show open; mixed → no restriction
+    if (hasClosed && !hasOtherStatuses) {
+      extraFilters.push({ isClosed: true });
+    } else if (!hasClosed && (rmStatuses.length > 0 || deptHodStatuses.length > 0)) {
       extraFilters.push({ isClosed: false });
     }
 
     // Requestor Dept Status — "Open" (--) means BOTH rm and hod haven't acted;
-    // "ack_pending" = Pending Acknowledgement; others = either rm or hod matches
-    if (rmStatuses.length > 0) {
-      const hasOpen       = rmStatuses.includes("--");
-      const hasAckPending = rmStatuses.includes("ack_pending");
-      const others        = rmStatuses.filter(s => s !== "--" && s !== "ack_pending");
-      const clauses       = [];
+    // "ack_pending" = Pending Acknowledgement; "not_approved" = neither rm nor hod is Approved; others = either rm or hod matches
+    if (rmActive.length > 0) {
+      const hasOpen        = rmActive.includes("--");
+      const hasAckPending  = rmActive.includes("ack_pending");
+      const hasNotApproved = rmActive.includes("not_approved");
+      const others         = rmActive.filter(s => s !== "--" && s !== "ack_pending" && s !== "not_approved");
+      const clauses        = [];
       if (hasOpen)          clauses.push({ AND: [{ rmStatus: "--" }, { hodStatus: "--" }] });
       if (hasAckPending)    clauses.push({ assignedStatus: "Pending Acknowledgement" });
+      if (hasNotApproved)   clauses.push({ AND: [{ rmStatus: { not: "Approved" } }, { hodStatus: { not: "Approved" } }] });
       if (others.length === 1)  clauses.push({ OR: [{ rmStatus: others[0] }, { hodStatus: others[0] }] });
       if (others.length  > 1)  clauses.push({ OR: [{ rmStatus: { in: others } }, { hodStatus: { in: others } }] });
       extraFilters.push(clauses.length === 1 ? clauses[0] : { OR: clauses });
     }
 
     // Assigned Dept Status — "Open" (--) means ALL three assigned-dept fields haven't acted;
-    // other statuses = ANY of the three assigned-dept fields matches
-    if (deptHodStatuses.length > 0) {
-      const hasOpen = deptHodStatuses.includes("--");
-      const others  = deptHodStatuses.filter(s => s !== "--");
-      const clauses = [];
+    // "ack_pending" = Pending Acknowledgement; "not_approved" = none of the three is Approved; others = ANY of the three matches
+    if (deptHodActive.length > 0) {
+      const hasOpen        = deptHodActive.includes("--");
+      const hasAckPending  = deptHodActive.includes("ack_pending");
+      const hasNotApproved = deptHodActive.includes("not_approved");
+      const others         = deptHodActive.filter(s => s !== "--" && s !== "ack_pending" && s !== "not_approved");
+      const clauses        = [];
       // "Open" = assigned RM, assigned HOD AND DeptHOD are all still pending
-      if (hasOpen) clauses.push({ AND: [{ assignedRmStatus: "--" }, { assignedHodStatus: "--" }, { deptHodStatus: "--" }] });
+      if (hasOpen)        clauses.push({ AND: [{ assignedRmStatus: "--" }, { assignedHodStatus: "--" }, { deptHodStatus: "--" }] });
+      if (hasAckPending)  clauses.push({ assignedStatus: "Pending Acknowledgement" });
+      if (hasNotApproved) clauses.push({ AND: [{ assignedRmStatus: { not: "Approved" } }, { assignedHodStatus: { not: "Approved" } }, { deptHodStatus: { not: "Approved" } }] });
       // Other statuses = any of the three assigned-dept fields has that status
       if (others.length === 1) clauses.push({ OR: [{ assignedRmStatus: others[0] }, { assignedHodStatus: others[0] }, { deptHodStatus: others[0] }] });
       if (others.length  > 1) clauses.push({ OR: [{ assignedRmStatus: { in: others } }, { assignedHodStatus: { in: others } }, { deptHodStatus: { in: others } }] });
@@ -308,6 +327,7 @@ class RequestService {
             { assignedPersonEmpId: { contains: empId } },
             { ccDepts:  { contains: userDept } },
             { ccEmpIds: { contains: empId } },
+            { requestorRole: 'broadcast' },
           ],
         };
       } else {
@@ -319,6 +339,7 @@ class RequestService {
             { assignedDepts: { contains: userDept } },
             { ccDepts:  { contains: userDept } },
             { ccEmpIds: { contains: empId } },
+            { requestorRole: 'broadcast' },
           ],
         };
       }
@@ -1011,7 +1032,7 @@ class RequestService {
       throw Object.assign(new Error("Not authorized."), { status: 403 });
     }
     const users = await prisma.user.findMany({
-      where:   { isActive: true, empId: { not: user.empId } },
+      where:   { isActive: true, role: "Requestor", empId: { not: user.empId } },
       select:  { empId: true, name: true, dept: true, location: true },
       orderBy: [{ dept: "asc" }, { name: "asc" }],
     });
@@ -1035,7 +1056,8 @@ class RequestService {
 
     if (!title?.trim()) throw Object.assign(new Error("Title is required."), { status: 400 });
 
-    const baseWhere = { isActive: true, empId: { not: user.empId } };
+    // Only Requestor-role users receive broadcasts
+    const baseWhere = { isActive: true, role: "Requestor", empId: { not: user.empId } };
 
     if (!sendToAll) {
       const orFilters = [];
@@ -1061,42 +1083,43 @@ class RequestService {
     const fUrls  = files.length > 0 ? JSON.stringify(files.map(f => this.buildFileUrl(req, f.filename))) : null;
     const fNames = files.length > 0 ? JSON.stringify(files.map(f => f.originalname))         : null;
 
-    const broadcastBase = {
-      empId:          user.empId,
-      purpose:        title.trim(),
-      description:    description?.trim() || null,
-      dept:           user.dept,
-      requestorRole:  "broadcast",
-      isClosed:       true,
-      resolvedDate:   now,
-      resolvedBy:     `${user.name} (Broadcast)`,
-      assignedStatus: "Broadcast",
-      deptHodStatus:  "Approved",
-      deptHodDate:    now,
-      fileUrl:  fUrl,
-      fileName: fName,
-      fileUrls: fUrls,
-      fileNames: fNames,
-    };
-
-    await prisma.request.createMany({
-      data: targets.map(t => ({
-        ...broadcastBase,
-        assignedDept:        t.dept,
-        assignedPersonEmpId: t.empId,
-        assignedPersonName:  t.name,
-      })),
-    });
-
-    // One sender-copy so the broadcaster sees exactly one entry in their own request list
+    // Save exactly ONE record — the sender's copy — so the broadcaster sees it in their list
     await prisma.request.create({
       data: {
-        ...broadcastBase,
+        empId:               user.empId,
+        purpose:             title.trim(),
+        description:         description?.trim() || null,
+        dept:                user.dept,
+        requestorRole:       "broadcast",
+        isClosed:            true,
+        resolvedDate:        now,
+        resolvedBy:          `${user.name} (Broadcast)`,
+        assignedStatus:      "Broadcast",
+        deptHodStatus:       "Approved",
+        deptHodDate:         now,
+        fileUrl:             fUrl,
+        fileName:            fName,
+        fileUrls:            fUrls,
+        fileNames:           fNames,
         assignedDept:        user.dept,
         assignedPersonEmpId: user.empId,
         assignedPersonName:  user.name,
       },
     });
+
+    // Notify all matched Requestors via push — no extra DB records created
+    const pushPayload = {
+      title:              title.trim(),
+      body:               description?.trim() || `Broadcast from ${user.dept} Department`,
+      icon:               "/rtsLogo.png",
+      badge:              "/rtsLogo.png",
+      tag:                `broadcast-${Date.now()}`,
+      requireInteraction: false,
+      type:               "broadcast",
+      url:                "/",
+      data:               { action: "broadcast", channel_id: "rts_notifications", senderDept: user.dept },
+    };
+    Promise.allSettled(targets.map(t => sendPushToUser(t.empId, pushPayload))).catch(() => {});
 
     return { success: true, sentTo: targets.length };
   }
@@ -1163,6 +1186,77 @@ class RequestService {
     });
 
     return formatRequest(updated, user.empId);
+  }
+
+  async getRoleCounts(user) {
+    const { empId } = user;
+
+    const availableRoles = await prisma.userRole.findMany({
+      where:  { empId },
+      select: { role: true, dept: true },
+    });
+    if (!availableRoles.length) return [];
+
+    const RESTRICTED_PREFIXES = ["Operations-", "Academics-", "Stores-"];
+    const RESTRICTED_EXACT    = new Set(["Game Development", "Software", "Animation", "Management", "HR", "Purchase"]);
+    const isRestricted = (dept) =>
+      RESTRICTED_PREFIXES.some(p => dept?.startsWith(p)) || RESTRICTED_EXACT.has(dept);
+
+    const counts = await Promise.all(
+      availableRoles.map(async ({ role, dept: userDept }) => {
+        let roleFilter = {};
+
+        if (role === "SuperUser" || role === "Management" || role === "Admin") {
+          roleFilter = {};
+        } else if (role === "Requestor") {
+          roleFilter = isRestricted(userDept)
+            ? { OR: [{ empId }, { assignedPersonEmpId: { contains: empId } }, { ccDepts: { contains: userDept } }, { ccEmpIds: { contains: empId } }, { requestorRole: "broadcast" }] }
+            : { OR: [{ empId }, { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }] }, { assignedPersonEmpId: { contains: empId } }, { assignedDepts: { contains: userDept } }, { ccDepts: { contains: userDept } }, { ccEmpIds: { contains: empId } }, { requestorRole: "broadcast" }] };
+        } else if (role === "DeptHOD") {
+          roleFilter = { OR: [
+            { AND: [{ empId }, { dept: userDept }, { NOT: { requestorRole: "broadcast" } }] },
+            { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }] },
+            { AND: [{ dept: userDept }, { assignedDept: userDept }] },
+            { assignedDepts: { contains: userDept } },
+            { ccDepts: { contains: userDept } },
+            { ccEmpIds: { contains: empId } },
+          ] };
+        } else if (role === "RM") {
+          roleFilter = { OR: [
+            { AND: [{ empId }, { dept: userDept }] },
+            { AND: [{ owner: { rmEmpId: empId } }, { dept: userDept }] },
+            { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }] },
+            { AND: [{ assignedDepts: { contains: userDept } }, { dept: { not: userDept } }] },
+            { AND: [{ owner: { rmEmpId: empId } }, { assignedDepts: { contains: userDept } }] },
+            { ccDepts: { contains: userDept } },
+            { ccEmpIds: { contains: empId } },
+          ] };
+        } else if (role === "HOD") {
+          roleFilter = { OR: [
+            { AND: [{ empId }, { dept: userDept }] },
+            { AND: [{ owner: { hodEmpId: empId } }, { dept: userDept }] },
+            { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }] },
+            { AND: [{ assignedDepts: { contains: userDept } }, { dept: { not: userDept } }] },
+            { AND: [{ owner: { hodEmpId: empId } }, { assignedDepts: { contains: userDept } }] },
+            { ccDepts: { contains: userDept } },
+            { ccEmpIds: { contains: empId } },
+          ] };
+        } else {
+          roleFilter = { OR: [{ empId }, { assignedPersonEmpId: { contains: empId } }, { ccDepts: { contains: userDept } }, { ccEmpIds: { contains: empId } }] };
+        }
+
+        const andFilters = [
+          { isClosed: false },
+          { NOT: { requestorRole: "broadcast" } },
+          { readReceipts: { none: { empId } } },
+        ];
+        if (Object.keys(roleFilter).length > 0) andFilters.unshift(roleFilter);
+
+        const count = await prisma.request.count({ where: { AND: andFilters } });
+        return { role, dept: userDept, count };
+      })
+    );
+    return counts;
   }
 }
 

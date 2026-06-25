@@ -15,6 +15,9 @@ router.get("/", ctrl.getAll);
 // GET unique filter options
 router.get("/filters", ctrl.getFilterOptions);
 
+// GET unread request counts per available role/dept (for role-switcher badge)
+router.get("/role-counts", ctrl.getRoleCounts);
+
 // GET employees by dept(s) — used when creating a request / forward
 router.get("/users-by-dept", ctrl.getUsersByDept);
 

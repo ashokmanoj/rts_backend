@@ -177,6 +177,15 @@ async function editRequest(req, res, next) {
   }
 }
 
+async function getRoleCounts(req, res, next) {
+  try {
+    const counts = await requestService.getRoleCounts(req.user);
+    res.json(counts);
+  } catch (err) {
+    next(err);
+  }
+}
+
 async function broadcastUsers(req, res, next) {
   try {
     const users = await requestService.broadcastUsers(req.user);
@@ -224,4 +233,4 @@ async function stopRecurring(req, res, next) {
   }
 }
 
-module.exports = { getAll, getById, getFilterOptions, create, approval, markSeen, markUnread, close, getHodPending, hodApproval, acknowledge, getUsersByDept, getDepartments, getLocations, deleteRequest, editRequest, stopRecurring, broadcastUsers, broadcastSend, attachAfterClose };
+module.exports = { getAll, getById, getFilterOptions, getRoleCounts, create, approval, markSeen, markUnread, close, getHodPending, hodApproval, acknowledge, getUsersByDept, getDepartments, getLocations, deleteRequest, editRequest, stopRecurring, broadcastUsers, broadcastSend, attachAfterClose };

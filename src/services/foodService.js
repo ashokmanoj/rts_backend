@@ -53,7 +53,21 @@ class FoodService {
       include: { user: true },
     });
 
-    if (!sub) return { subscribed: false, isActive: false, isCancelledNextWeek: false };
+    if (!sub) {
+      // Not subscribed — check if a manual entry exists for the current or upcoming week
+      // so mobile can still fetch and display the calendar
+      try {
+        const now       = getNowIST();
+        const thisWeek  = getMondayOfCurrentWeek(now);
+        const manualEntry = await prisma.foodManualEntry.findFirst({
+          where: { empId, weekStartDate: { gte: thisWeek } },
+        });
+        if (manualEntry) {
+          return { subscribed: true, isManualOnly: true, isActive: true, isCancelledNextWeek: false };
+        }
+      } catch { /* table may not exist yet */ }
+      return { subscribed: false, isActive: false, isCancelledNextWeek: false };
+    }
 
     const now          = getNowIST();
     const nextMonday   = getNextMonday(now);
