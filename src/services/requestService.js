@@ -95,7 +95,7 @@ class RequestService {
       }
     } else if (role === "DeptHOD") {
       roleFilter = { OR: [
-        { AND: [{ empId }, { dept: userDept }, { NOT: { requestorRole: 'broadcast' } }] },
+        { AND: [{ empId }, { dept: userDept }] },
         { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }, { assignedPersonEmpId: null }] },
         { AND: [{ dept: userDept }, { assignedDept: userDept }, { assignedPersonEmpId: null }] },
         { AND: [{ assignedDepts: { contains: userDept } }, { assignedPersonEmpId: null }] },
@@ -345,7 +345,7 @@ class RequestService {
       }
     } else if (role === "DeptHOD") {
       roleFilter = { OR: [
-        { AND: [{ empId }, { dept: userDept }, { NOT: { requestorRole: 'broadcast' } }] },
+        { AND: [{ empId }, { dept: userDept }] },
         { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }, { assignedPersonEmpId: null }] },
         { AND: [{ dept: userDept }, { assignedDept: userDept }, { assignedPersonEmpId: null }] },
         { AND: [{ assignedDepts: { contains: userDept } }, { assignedPersonEmpId: null }] },
@@ -1216,7 +1216,7 @@ class RequestService {
             : { OR: [{ empId }, { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }, { assignedPersonEmpId: null }] }, { assignedPersonEmpId: { contains: empId } }, { AND: [{ assignedDepts: { contains: userDept } }, { assignedPersonEmpId: null }] }, { ccDepts: { contains: userDept } }, { ccEmpIds: { contains: empId } }, { requestorRole: "broadcast" }] };
         } else if (role === "DeptHOD") {
           roleFilter = { OR: [
-            { AND: [{ empId }, { dept: userDept }, { NOT: { requestorRole: "broadcast" } }] },
+            { AND: [{ empId }, { dept: userDept }] },
             { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }, { assignedPersonEmpId: null }] },
             { AND: [{ dept: userDept }, { assignedDept: userDept }, { assignedPersonEmpId: null }] },
             { AND: [{ assignedDepts: { contains: userDept } }, { assignedPersonEmpId: null }] },
