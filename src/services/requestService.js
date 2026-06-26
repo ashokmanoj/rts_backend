@@ -80,13 +80,13 @@ class RequestService {
         };
       } else {
         // Other depts (HR, Purchase, Broadcasting, etc.):
-        // own + incoming to their dept + assigned + forwarding chain
+        // own + incoming to their dept (no person assigned) + assigned + forwarding chain
         roleFilter = {
           OR: [
             { empId },
-            { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }] },
+            { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }, { assignedPersonEmpId: null }] },
             { assignedPersonEmpId: { contains: empId } },
-            { assignedDepts: { contains: userDept } },
+            { AND: [{ assignedDepts: { contains: userDept } }, { assignedPersonEmpId: null }] },
             { ccDepts:  { contains: userDept } },
             { ccEmpIds: { contains: empId } },
             { requestorRole: 'broadcast' },
@@ -96,9 +96,9 @@ class RequestService {
     } else if (role === "DeptHOD") {
       roleFilter = { OR: [
         { AND: [{ empId }, { dept: userDept }, { NOT: { requestorRole: 'broadcast' } }] },
-        { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }] },
-        { AND: [{ dept: userDept }, { assignedDept: userDept }] },
-        { assignedDepts: { contains: userDept } },
+        { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }, { assignedPersonEmpId: null }] },
+        { AND: [{ dept: userDept }, { assignedDept: userDept }, { assignedPersonEmpId: null }] },
+        { AND: [{ assignedDepts: { contains: userDept } }, { assignedPersonEmpId: null }] },
         { ccDepts:  { contains: userDept } },
         { ccEmpIds: { contains: empId } },
       ] };
@@ -107,9 +107,9 @@ class RequestService {
         OR: [
           { AND: [{ empId }, { dept: userDept }] },
           { AND: [{ owner: { rmEmpId: empId } }, { dept: userDept }] },
-          { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }] },
-          { AND: [{ assignedDepts: { contains: userDept } }, { dept: { not: userDept } }] },
-          { AND: [{ owner: { rmEmpId: empId } }, { assignedDepts: { contains: userDept } }] },
+          { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }, { assignedPersonEmpId: null }] },
+          { AND: [{ assignedDepts: { contains: userDept } }, { dept: { not: userDept } }, { assignedPersonEmpId: null }] },
+          { AND: [{ owner: { rmEmpId: empId } }, { assignedDepts: { contains: userDept } }, { assignedPersonEmpId: null }] },
           { ccDepts:  { contains: userDept } },
           { ccEmpIds: { contains: empId } },
         ],
@@ -119,9 +119,9 @@ class RequestService {
         OR: [
           { AND: [{ empId }, { dept: userDept }] },
           { AND: [{ owner: { hodEmpId: empId } }, { dept: userDept }] },
-          { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }] },
-          { AND: [{ assignedDepts: { contains: userDept } }, { dept: { not: userDept } }] },
-          { AND: [{ owner: { hodEmpId: empId } }, { assignedDepts: { contains: userDept } }] },
+          { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }, { assignedPersonEmpId: null }] },
+          { AND: [{ assignedDepts: { contains: userDept } }, { dept: { not: userDept } }, { assignedPersonEmpId: null }] },
+          { AND: [{ owner: { hodEmpId: empId } }, { assignedDepts: { contains: userDept } }, { assignedPersonEmpId: null }] },
           { ccDepts:  { contains: userDept } },
           { ccEmpIds: { contains: empId } },
         ],
@@ -334,9 +334,9 @@ class RequestService {
         roleFilter = {
           OR: [
             { empId },
-            { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }] },
+            { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }, { assignedPersonEmpId: null }] },
             { assignedPersonEmpId: { contains: empId } },
-            { assignedDepts: { contains: userDept } },
+            { AND: [{ assignedDepts: { contains: userDept } }, { assignedPersonEmpId: null }] },
             { ccDepts:  { contains: userDept } },
             { ccEmpIds: { contains: empId } },
             { requestorRole: 'broadcast' },
@@ -346,9 +346,9 @@ class RequestService {
     } else if (role === "DeptHOD") {
       roleFilter = { OR: [
         { AND: [{ empId }, { dept: userDept }, { NOT: { requestorRole: 'broadcast' } }] },
-        { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }] },
-        { AND: [{ dept: userDept }, { assignedDept: userDept }] },
-        { assignedDepts: { contains: userDept } },
+        { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }, { assignedPersonEmpId: null }] },
+        { AND: [{ dept: userDept }, { assignedDept: userDept }, { assignedPersonEmpId: null }] },
+        { AND: [{ assignedDepts: { contains: userDept } }, { assignedPersonEmpId: null }] },
         { ccDepts:  { contains: userDept } },
         { ccEmpIds: { contains: empId } },
       ] };
@@ -357,9 +357,9 @@ class RequestService {
         OR: [
           { AND: [{ empId }, { dept: userDept }] },
           { AND: [{ owner: { rmEmpId: empId } }, { dept: userDept }] },
-          { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }] },
-          { AND: [{ assignedDepts: { contains: userDept } }, { dept: { not: userDept } }] },
-          { AND: [{ owner: { rmEmpId: empId } }, { assignedDepts: { contains: userDept } }] },
+          { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }, { assignedPersonEmpId: null }] },
+          { AND: [{ assignedDepts: { contains: userDept } }, { dept: { not: userDept } }, { assignedPersonEmpId: null }] },
+          { AND: [{ owner: { rmEmpId: empId } }, { assignedDepts: { contains: userDept } }, { assignedPersonEmpId: null }] },
           { ccDepts:  { contains: userDept } },
           { ccEmpIds: { contains: empId } },
         ],
@@ -369,9 +369,9 @@ class RequestService {
         OR: [
           { AND: [{ empId }, { dept: userDept }] },
           { AND: [{ owner: { hodEmpId: empId } }, { dept: userDept }] },
-          { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }] },
-          { AND: [{ assignedDepts: { contains: userDept } }, { dept: { not: userDept } }] },
-          { AND: [{ owner: { hodEmpId: empId } }, { assignedDepts: { contains: userDept } }] },
+          { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }, { assignedPersonEmpId: null }] },
+          { AND: [{ assignedDepts: { contains: userDept } }, { dept: { not: userDept } }, { assignedPersonEmpId: null }] },
+          { AND: [{ owner: { hodEmpId: empId } }, { assignedDepts: { contains: userDept } }, { assignedPersonEmpId: null }] },
           { ccDepts:  { contains: userDept } },
           { ccEmpIds: { contains: empId } },
         ],
@@ -486,8 +486,10 @@ class RequestService {
         forwarded:     true,
         forwardedBy:   user.name,
         forwardedAt:   now,
-        assignedDept:  newDept,
-        assignedDepts: allDepts.join(","),   // preserved for all forward types
+        assignedDept:        newDept,
+        assignedDepts:       allDepts.join(","),   // preserved for all forward types
+        assignedPersonEmpId: null,                 // clear person assignment — forwarding targets a dept, not a specific person
+        assignedPersonName:  null,
         // Reset assigned-dept fields so the receiving dept gets fresh action buttons.
         // rmStatus/hodStatus for the requestor's dept are updated below if applicable.
         deptHodStatus:      "--",  deptHodDate:      null,
@@ -1211,13 +1213,13 @@ class RequestService {
         } else if (role === "Requestor") {
           roleFilter = isRestricted(userDept)
             ? { OR: [{ empId }, { assignedPersonEmpId: { contains: empId } }, { ccDepts: { contains: userDept } }, { ccEmpIds: { contains: empId } }, { requestorRole: "broadcast" }] }
-            : { OR: [{ empId }, { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }] }, { assignedPersonEmpId: { contains: empId } }, { assignedDepts: { contains: userDept } }, { ccDepts: { contains: userDept } }, { ccEmpIds: { contains: empId } }, { requestorRole: "broadcast" }] };
+            : { OR: [{ empId }, { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }, { assignedPersonEmpId: null }] }, { assignedPersonEmpId: { contains: empId } }, { AND: [{ assignedDepts: { contains: userDept } }, { assignedPersonEmpId: null }] }, { ccDepts: { contains: userDept } }, { ccEmpIds: { contains: empId } }, { requestorRole: "broadcast" }] };
         } else if (role === "DeptHOD") {
           roleFilter = { OR: [
             { AND: [{ empId }, { dept: userDept }, { NOT: { requestorRole: "broadcast" } }] },
-            { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }] },
-            { AND: [{ dept: userDept }, { assignedDept: userDept }] },
-            { assignedDepts: { contains: userDept } },
+            { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }, { assignedPersonEmpId: null }] },
+            { AND: [{ dept: userDept }, { assignedDept: userDept }, { assignedPersonEmpId: null }] },
+            { AND: [{ assignedDepts: { contains: userDept } }, { assignedPersonEmpId: null }] },
             { ccDepts: { contains: userDept } },
             { ccEmpIds: { contains: empId } },
           ] };
@@ -1225,9 +1227,9 @@ class RequestService {
           roleFilter = { OR: [
             { AND: [{ empId }, { dept: userDept }] },
             { AND: [{ owner: { rmEmpId: empId } }, { dept: userDept }] },
-            { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }] },
-            { AND: [{ assignedDepts: { contains: userDept } }, { dept: { not: userDept } }] },
-            { AND: [{ owner: { rmEmpId: empId } }, { assignedDepts: { contains: userDept } }] },
+            { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }, { assignedPersonEmpId: null }] },
+            { AND: [{ assignedDepts: { contains: userDept } }, { dept: { not: userDept } }, { assignedPersonEmpId: null }] },
+            { AND: [{ owner: { rmEmpId: empId } }, { assignedDepts: { contains: userDept } }, { assignedPersonEmpId: null }] },
             { ccDepts: { contains: userDept } },
             { ccEmpIds: { contains: empId } },
           ] };
@@ -1235,9 +1237,9 @@ class RequestService {
           roleFilter = { OR: [
             { AND: [{ empId }, { dept: userDept }] },
             { AND: [{ owner: { hodEmpId: empId } }, { dept: userDept }] },
-            { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }] },
-            { AND: [{ assignedDepts: { contains: userDept } }, { dept: { not: userDept } }] },
-            { AND: [{ owner: { hodEmpId: empId } }, { assignedDepts: { contains: userDept } }] },
+            { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }, { assignedPersonEmpId: null }] },
+            { AND: [{ assignedDepts: { contains: userDept } }, { dept: { not: userDept } }, { assignedPersonEmpId: null }] },
+            { AND: [{ owner: { hodEmpId: empId } }, { assignedDepts: { contains: userDept } }, { assignedPersonEmpId: null }] },
             { ccDepts: { contains: userDept } },
             { ccEmpIds: { contains: empId } },
           ] };
