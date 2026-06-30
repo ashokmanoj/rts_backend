@@ -1166,7 +1166,8 @@ class RequestService {
     const isSpecificallyAssigned = existing.assignedPersonEmpId
       ? existing.assignedPersonEmpId.split(",").map(s => s.trim()).includes(user.empId)
       : false;
-    if (!isAssignedDept && !isSpecificallyAssigned)
+    const isRequestor = existing.empId === user.empId;
+    if (!isAssignedDept && !isSpecificallyAssigned && !isRequestor)
       throw Object.assign(new Error("Not authorized to attach files."), { status: 403 });
 
     const files = Array.isArray(uploadedFiles) ? uploadedFiles : (uploadedFiles ? [uploadedFiles] : []);
