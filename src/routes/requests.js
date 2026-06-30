@@ -61,7 +61,7 @@ router.patch("/:id/close", upload.array("files", 10), authorizeRequestAccess, ct
 router.patch("/:id/attach-after-close", upload.array("files", 10), authorizeRequestAccess, ctrl.attachAfterClose);
 
 // SuperUser only: edit or delete a request
-router.patch("/:id/edit",   authorize("SuperUser"), ctrl.editRequest);
+router.patch("/:id/edit",   upload.array("files", 10), authorize("SuperUser"), ctrl.editRequest);
 router.delete("/:id",       authorize("SuperUser"), ctrl.deleteRequest);
 
 // ================= CHAT ROUTES =================

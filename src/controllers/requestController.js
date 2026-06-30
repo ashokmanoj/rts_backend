@@ -170,7 +170,7 @@ async function deleteRequest(req, res, next) {
 async function editRequest(req, res, next) {
   try {
     const reqId = Number(req.params.id);
-    const result = await requestService.editRequest(reqId, req.user, req.body);
+    const result = await requestService.editRequest(reqId, req.user, req.body, req.files || [], req);
     res.json(result);
   } catch (err) {
     next(err);

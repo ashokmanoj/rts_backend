@@ -1006,20 +1006,50 @@ class RequestService {
     return { success: true };
   }
 
-  async editRequest(reqId, user, body) {
+  async editRequest(reqId, user, body, uploadedFiles = [], req) {
     if (user.role !== "SuperUser") throw new Error("Only SuperUser can edit requests.");
     const existing = await prisma.request.findUnique({ where: { id: reqId }, include: WITH_OWNER });
     if (!existing) throw new Error("Request not found.");
 
-    const { purpose, description, assignedDept, assignedDepts, dueDate, assignedPersonEmpId, assignedPersonName } = body;
+    const { purpose, description, assignedDept, assignedDepts, dueDate,
+            assignedPersonEmpId, assignedPersonName,
+            ccDepts, ccEmpIds, ccPersonNames } = body;
     const updateData = {};
-    if (purpose           !== undefined) updateData.purpose           = purpose;
-    if (description       !== undefined) updateData.description       = description;
-    if (assignedDept      !== undefined) updateData.assignedDept      = assignedDept;
-    if (assignedDepts     !== undefined) updateData.assignedDepts     = assignedDepts || null;
+    if (purpose             !== undefined) updateData.purpose             = purpose;
+    if (description         !== undefined) updateData.description         = description;
+    if (assignedDept        !== undefined) updateData.assignedDept        = assignedDept;
+    if (assignedDepts       !== undefined) updateData.assignedDepts       = assignedDepts || null;
     if (assignedPersonEmpId !== undefined) updateData.assignedPersonEmpId = assignedPersonEmpId || null;
     if (assignedPersonName  !== undefined) updateData.assignedPersonName  = assignedPersonName  || null;
-    if (dueDate !== undefined) updateData.dueDate = dueDate ? new Date(dueDate) : null;
+    if (dueDate             !== undefined) updateData.dueDate             = dueDate ? new Date(dueDate) : null;
+    if (ccDepts             !== undefined) updateData.ccDepts             = ccDepts      || null;
+    if (ccEmpIds            !== undefined) updateData.ccEmpIds            = ccEmpIds     || null;
+    if (ccPersonNames       !== undefined) updateData.ccPersonNames       = ccPersonNames || null;
+
+    // Append new uploaded files to existing ones
+    const files = Array.isArray(uploadedFiles) ? uploadedFiles : (uploadedFiles ? [uploadedFiles] : []);
+    if (files.length > 0) {
+      let existingUrls = [];
+      let existingNames = [];
+      if (existing.fileUrls) {
+        try { existingUrls = JSON.parse(existing.fileUrls); } catch { existingUrls = []; }
+      } else if (existing.fileUrl) {
+        existingUrls = [existing.fileUrl];
+      }
+      if (existing.fileNames) {
+        try { existingNames = JSON.parse(existing.fileNames); } catch { existingNames = []; }
+      } else if (existing.fileName) {
+        existingNames = [existing.fileName];
+      }
+      const newUrls  = files.map(f => this.buildFileUrl(req, f.filename));
+      const newNames = files.map(f => f.originalname || f.filename);
+      const allUrls  = [...existingUrls,  ...newUrls];
+      const allNames = [...existingNames, ...newNames];
+      updateData.fileUrl   = allUrls[0];
+      updateData.fileName  = allNames[0];
+      updateData.fileUrls  = JSON.stringify(allUrls);
+      updateData.fileNames = JSON.stringify(allNames);
+    }
 
     const updated = await prisma.request.update({ where: { id: reqId }, data: updateData, include: WITH_OWNER });
     await prisma.chatMessage.create({
