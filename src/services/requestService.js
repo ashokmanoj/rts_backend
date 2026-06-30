@@ -1051,10 +1051,10 @@ class RequestService {
       updateData.fileNames = JSON.stringify(allNames);
     }
 
-    const updated = await prisma.request.update({ where: { id: reqId }, data: updateData, include: WITH_OWNER });
-    await prisma.chatMessage.create({
-      data: { requestId: reqId, authorId: user.empId, author: user.name, role: user.role, type: "system", text: `✏️ Request edited by ${user.name} (SuperUser).` },
-    });
+    const [updated] = await prisma.$transaction([
+      prisma.request.update({ where: { id: reqId }, data: updateData, include: WITH_OWNER }),
+      prisma.chatMessage.deleteMany({ where: { requestId: reqId } }),
+    ]);
     return formatRequest(updated, user.empId);
   }
 
