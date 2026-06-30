@@ -182,8 +182,45 @@ class FoodService {
 
   // ── Button 4: Enable / disable entire year ────────────────────────────────
   async enableYear(empId) {
-    const { canCancelNow } = require("../utils/workingDays");
+    const { canCancelNow, getNowIST } = require("../utils/workingDays");
     if (!canCancelNow()) throw foodLockError();
+
+    const now        = getNowIST();
+    const nextMonday = getNextMonday(now);
+
+    const sub = await prisma.foodSubscription.findUnique({ where: { empId } });
+
+    // If the suspension started in the past, retroactively record each already-paused
+    // week as a FoodCancellation so the calendar and billing reports don't count those
+    // weeks as active subscription days.
+    if (sub?.suspendedFrom) {
+      const suspStart = new Date(sub.suspendedFrom);
+
+      if (suspStart < nextMonday) {
+        const upserts = [];
+        const curr = new Date(suspStart);
+        while (curr < nextMonday) {
+          upserts.push(
+            prisma.foodCancellation.upsert({
+              where:  { empId_weekStartDate: { empId, weekStartDate: new Date(curr) } },
+              create: { empId, weekStartDate: new Date(curr) },
+              update: {},
+            })
+          );
+          curr.setDate(curr.getDate() + 7);
+        }
+
+        await prisma.$transaction([
+          ...upserts,
+          prisma.foodSubscription.update({
+            where: { empId },
+            data:  { isActive: true, suspendedFrom: null },
+          }),
+        ]);
+        return { success: true };
+      }
+    }
+
     return prisma.foodSubscription.upsert({
       where:  { empId },
       update: { isActive: true, suspendedFrom: null },
