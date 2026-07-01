@@ -149,6 +149,8 @@ model Request {
   // Assigned person (from multi-dept selection)
   assignedPersonEmpId String?   @map("assigned_person_emp_id")
   assignedPersonName  String?   @map("assigned_person_name")
+  // True only when requestor explicitly picked this person in Add Request
+  isDirectAssign      Boolean   @default(false) @map("is_direct_assign")
 
   // CC (Copy To) — receives the ticket, can view and chat, cannot take action
   ccDepts       String?   @map("cc_depts")

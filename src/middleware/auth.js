@@ -105,7 +105,7 @@ async function authorizeRequestAccess(req, res, next) {
   try {
     const request = await prisma.request.findUnique({
       where: { id: requestId },
-      select: { empId: true, dept: true, assignedDept: true, assignedDepts: true, assignedPersonEmpId: true, rmStatus: true, hodStatus: true, deptHodStatus: true, checkingBy: true, ccEmpIds: true, ccDepts: true }
+      select: { empId: true, dept: true, assignedDept: true, assignedDepts: true, assignedPersonEmpId: true, isDirectAssign: true, rmStatus: true, hodStatus: true, deptHodStatus: true, checkingBy: true, ccEmpIds: true, ccDepts: true }
     });
 
     if (!request) return res.status(404).json({ error: "Request not found." });
@@ -181,7 +181,7 @@ async function authorizeRequestAccess(req, res, next) {
     // Only non-restricted regular staff can see incoming requests assigned to their dept
     const deptOwnOnly = ["Academics", "Animation", "Software"];
     const isOwnOnly = (dept) => deptOwnOnly.some(p => dept?.startsWith(p));
-    if (userDept && !isOwnOnly(userDept) && reqAssigned === userDept && reqDept !== userDept && !reqPersonIds) return next();
+    if (userDept && !isOwnOnly(userDept) && reqAssigned === userDept && reqDept !== userDept && !request.isDirectAssign) return next();
 
     // Tracking: non-restricted staff can access requests where their dept is in the forwarding chain
     if (userDept && !isOwnOnly(userDept) && assignedDeptsArr.includes(userDept)) return next();

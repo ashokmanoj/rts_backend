@@ -12,6 +12,7 @@ const app = require("./app");
 const prisma = require("./config/database");
 const { startFoodReminderCron }  = require("./utils/foodReminder");
 const { startRecurringCron }     = require("./utils/recurringCron");
+const { startAutoCloseCron }     = require("./utils/autoCloseCron");
 app.disable("x-powered-by"); // Hide Express header for security
 
 const PORT = process.env.PORT || 5000;
@@ -22,6 +23,7 @@ prisma.$connect()
     console.log("✅ Database connected via Prisma");
     startFoodReminderCron();
     startRecurringCron();
+    startAutoCloseCron();
     app.listen(PORT, "0.0.0.0", () => {
       console.log(`\n🚀 RTS Backend running on http://0.0.0.0:${PORT}`);
       console.log(`    Local:   http://localhost:${PORT}`);
