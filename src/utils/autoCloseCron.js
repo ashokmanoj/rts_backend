@@ -22,6 +22,7 @@ async function runAutoCloseJob() {
       assignedStatus: "Pending Acknowledgement",
       isClosed:       false,
       resolvedDate:   { lte: cutoff },
+      assignedDept:   { not: "RTS Help Desk" },
     },
     include: { owner: true },
   });
