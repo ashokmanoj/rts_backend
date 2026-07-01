@@ -229,7 +229,7 @@ model CloseTicket {
 model ChatMessage {
   id           Int         @id @default(autoincrement())
   requestId    Int         @map("request_id")
-  authorId     String      @map("author_id")
+  authorId     String?     @map("author_id")
   author       String
   role         String
   dept         String?
@@ -248,7 +248,7 @@ model ChatMessage {
   createdAt    DateTime    @default(now()) @map("created_at")
 
   request  Request @relation(fields: [requestId], references: [id], onDelete: Cascade)
-  sender   User    @relation("MessageSender", fields: [authorId], references: [empId])
+  sender   User?   @relation("MessageSender", fields: [authorId], references: [empId])
 
   @@index([requestId])
   @@map("chat_messages")

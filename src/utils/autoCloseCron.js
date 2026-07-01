@@ -50,7 +50,7 @@ async function runAutoCloseJob() {
         prisma.chatMessage.create({
           data: {
             requestId: req.id,
-            authorId:  "SYSTEM",
+            authorId:  null,
             author:    "System",
             role:      "System",
             type:      "system",
