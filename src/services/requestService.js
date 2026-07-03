@@ -491,6 +491,7 @@ class RequestService {
         assignedDepts:       allDepts.join(","),   // preserved for all forward types
         assignedPersonEmpId: null,                 // clear person assignment — forwarding targets a dept, not a specific person
         assignedPersonName:  null,
+        isDirectAssign:      false,                // forwarding restores dept-level visibility
         // Reset assigned-dept fields so the receiving dept gets fresh action buttons.
         // rmStatus/hodStatus for the requestor's dept are updated below if applicable.
         deptHodStatus:      "--",  deptHodDate:      null,
