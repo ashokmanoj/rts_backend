@@ -555,6 +555,100 @@ class FoodService {
     ]);
     return { success: true };
   }
+
+  // ── SuperUser: add cancellations for a date range ─────────────────────────
+  _getMondaysInRange(startDate, endDate) {
+    const { getWeekStart } = require('../utils/workingDays');
+    const [sy, sm, sd] = startDate.split('-').map(Number);
+    const [ey, em, ed] = endDate.split('-').map(Number);
+    // extend end by 7 days so the Monday of the week containing endDate is included
+    const end = new Date(ey, em - 1, ed + 7);
+    end.setHours(23, 59, 59, 999);
+    const mondays = [];
+    let curr = getWeekStart(new Date(sy, sm - 1, sd));
+    while (curr <= end) {
+      mondays.push(new Date(curr));
+      curr.setDate(curr.getDate() + 7);
+      curr.setHours(0, 0, 0, 0);
+    }
+    return mondays;
+  }
+
+  async previewCancelRange({ empId, startDate, endDate }) {
+    if (!startDate) return { weeks: 0, users: 0 };
+    const mondays = this._getMondaysInRange(startDate, endDate || startDate);
+    const userCount = empId
+      ? 1
+      : await prisma.foodSubscription.count({ where: { isActive: true } });
+    return { weeks: mondays.length, users: userCount };
+  }
+
+  async cancelWeeksInRange({ empId, startDate, endDate }) {
+    if (!startDate) return { created: 0 };
+    const mondays = this._getMondaysInRange(startDate, endDate || startDate);
+    if (!mondays.length) return { created: 0 };
+
+    let empIds;
+    if (empId) {
+      empIds = [empId];
+    } else {
+      const subs = await prisma.foodSubscription.findMany({ where: { isActive: true }, select: { empId: true } });
+      empIds = subs.map(s => s.empId);
+    }
+
+    let created = 0;
+    for (const monday of mondays) {
+      const ops = empIds.map(id =>
+        prisma.foodCancellation.upsert({
+          where:  { empId_weekStartDate: { empId: id, weekStartDate: monday } },
+          create: { empId: id, weekStartDate: monday },
+          update: {},
+        })
+      );
+      await prisma.$transaction(ops);
+      created += ops.length;
+    }
+    return { created };
+  }
+
+  // ── SuperUser: count / clear food cancellation records ────────────────────
+  _cancellationDateFilter(startDate, endDate) {
+    const df = {};
+    if (startDate) {
+      // Subtract 1 day to handle IST→UTC offset: a Monday stored as Sunday 18:30 UTC
+      // is still found when the caller passes that Monday's date string.
+      const sd = new Date(startDate);
+      sd.setDate(sd.getDate() - 1);
+      df.gte = sd;
+    }
+    if (endDate) {
+      // Add 6 days so that "next week" cancellations are included.
+      // e.g. user picks endDate = Saturday Jul 4; the cancellation they made today
+      // is for next Monday Jul 6 (stored as Jul 5 18:30 UTC). Without the extension
+      // that weekStart would exceed the filter and be missed.
+      const ed = new Date(endDate);
+      ed.setDate(ed.getDate() + 6);
+      df.lte = ed;
+    }
+    return Object.keys(df).length ? df : null;
+  }
+
+  async countCancellations({ empId, startDate, endDate }) {
+    const where = {};
+    if (empId) where.empId = empId;
+    const df = this._cancellationDateFilter(startDate, endDate);
+    if (df) where.weekStartDate = df;
+    return prisma.foodCancellation.count({ where });
+  }
+
+  async deleteCancellations({ empId, startDate, endDate }) {
+    const where = {};
+    if (empId) where.empId = empId;
+    const df = this._cancellationDateFilter(startDate, endDate);
+    if (df) where.weekStartDate = df;
+    const result = await prisma.foodCancellation.deleteMany({ where });
+    return { deleted: result.count };
+  }
 }
 
 module.exports = new FoodService();

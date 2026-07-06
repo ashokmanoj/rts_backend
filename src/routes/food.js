@@ -22,6 +22,10 @@ const {
   adminSubscribe,
   adminToggle,
   adminDelete,
+  adminCountCancellations,
+  adminDeleteCancellations,
+  adminPreviewCancelRange,
+  adminCancelRange,
 } = require('../controllers/foodController');
 
 router.use(authenticate);
@@ -52,9 +56,17 @@ router.get('/admin/users',             authorizeHODReport, getUsers);
 router.post('/admin/manual-entry',     authorizeHODReport, addManualEntry);
 
 // SuperUser admin CRUD
-router.get('/admin/subscriptions',     authorize('SuperUser'), adminGetAll);
-router.post('/admin/subscribe/:empId', authorize('SuperUser'), adminSubscribe);
-router.patch('/admin/toggle/:empId',   authorize('SuperUser'), adminToggle);
-router.delete('/admin/unsubscribe/:empId', authorize('SuperUser'), adminDelete);
+router.get('/admin/subscriptions',             authorize('SuperUser'), adminGetAll);
+router.post('/admin/subscribe/:empId',         authorize('SuperUser'), adminSubscribe);
+router.patch('/admin/toggle/:empId',           authorize('SuperUser'), adminToggle);
+router.delete('/admin/unsubscribe/:empId',     authorize('SuperUser'), adminDelete);
+
+// SuperUser: clear food cancellation votes
+router.get('/admin/cancellations/count',       authorize('SuperUser'), adminCountCancellations);
+router.delete('/admin/cancellations',          authorize('SuperUser'), adminDeleteCancellations);
+
+// SuperUser: add cancellations for a date range (remove food for those weeks)
+router.get('/admin/cancel-range/count',        authorize('SuperUser'), adminPreviewCancelRange);
+router.post('/admin/cancel-range',             authorize('SuperUser'), adminCancelRange);
 
 module.exports = router;

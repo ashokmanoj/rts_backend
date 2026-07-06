@@ -85,9 +85,12 @@ async function disableYear(req, res, next) {
 
 async function getCalendar(req, res, next) {
   try {
-    const month = parseInt(req.query.month) || (new Date().getMonth() + 1);
-    const year  = parseInt(req.query.year)  || new Date().getFullYear();
-    const data  = await foodService.getCalendar(req.user.empId, month, year);
+    const month  = parseInt(req.query.month) || (new Date().getMonth() + 1);
+    const year   = parseInt(req.query.year)  || new Date().getFullYear();
+    const empId  = (req.user.role === 'SuperUser' && req.query.empId)
+      ? req.query.empId
+      : req.user.empId;
+    const data   = await foodService.getCalendar(empId, month, year);
     res.json(data);
   } catch (err) { next(err); }
 }
@@ -174,6 +177,50 @@ async function adminDelete(req, res, next) {
   } catch (err) { next(err); }
 }
 
+async function adminPreviewCancelRange(req, res, next) {
+  try {
+    const { empId, startDate, endDate } = req.query;
+    const preview = await foodService.previewCancelRange({
+      empId: empId || null, startDate: startDate || null, endDate: endDate || null,
+    });
+    res.json(preview);
+  } catch (err) { next(err); }
+}
+
+async function adminCancelRange(req, res, next) {
+  try {
+    const { empId, startDate, endDate } = req.body;
+    const result = await foodService.cancelWeeksInRange({
+      empId: empId || null, startDate: startDate || null, endDate: endDate || null,
+    });
+    res.json(result);
+  } catch (err) { next(err); }
+}
+
+async function adminCountCancellations(req, res, next) {
+  try {
+    const { empId, startDate, endDate } = req.query;
+    const count = await foodService.countCancellations({
+      empId:     empId     || null,
+      startDate: startDate || null,
+      endDate:   endDate   || null,
+    });
+    res.json({ count });
+  } catch (err) { next(err); }
+}
+
+async function adminDeleteCancellations(req, res, next) {
+  try {
+    const { empId, startDate, endDate } = req.query;
+    const result = await foodService.deleteCancellations({
+      empId:     empId     || null,
+      startDate: startDate || null,
+      endDate:   endDate   || null,
+    });
+    res.json(result);
+  } catch (err) { next(err); }
+}
+
 module.exports = {
   subscribe, getStatus,
   cancelNextWeek, undoCancelNextWeek,
@@ -183,4 +230,6 @@ module.exports = {
   getCalendar, getReport, downloadReport,
   addManualEntry, getUsers,
   adminGetAll, adminSubscribe, adminToggle, adminDelete,
+  adminCountCancellations, adminDeleteCancellations,
+  adminPreviewCancelRange, adminCancelRange,
 };
