@@ -561,8 +561,8 @@ class FoodService {
     const { getWeekStart } = require('../utils/workingDays');
     const [sy, sm, sd] = startDate.split('-').map(Number);
     const [ey, em, ed] = endDate.split('-').map(Number);
-    // extend end by 7 days so the Monday of the week containing endDate is included
-    const end = new Date(ey, em - 1, ed + 7);
+    // Include a week only if its Monday falls on or before endDate
+    const end = new Date(ey, em - 1, ed);
     end.setHours(23, 59, 59, 999);
     const mondays = [];
     let curr = getWeekStart(new Date(sy, sm - 1, sd));

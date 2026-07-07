@@ -42,6 +42,7 @@ app.use(helmet({
         "https://www.telerts.com",
         "http://telerts.com",
         "http://www.telerts.com",
+        "https://telerts.vercel.app",
       ]
     }
   },
@@ -82,6 +83,7 @@ const allowedOrigins = [
   "http://www.telerts.com",    // ← added
   "https://telerts.com",
   "https://www.telerts.com",
+  "https://telerts.vercel.app",
 ].filter(Boolean);
 
 app.use(cors({

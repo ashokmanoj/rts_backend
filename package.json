@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
+    "postinstall": "prisma generate",
     "db:push": "npx prisma db push",
     "db:seed": "node src/db/seed.js",
     "db:setup": "npx prisma generate && npx prisma db push && node src/db/seed.js"
