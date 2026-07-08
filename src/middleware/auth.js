@@ -105,7 +105,7 @@ async function authorizeRequestAccess(req, res, next) {
   try {
     const request = await prisma.request.findUnique({
       where: { id: requestId },
-      select: { empId: true, dept: true, assignedDept: true, assignedDepts: true, assignedPersonEmpId: true, isDirectAssign: true, rmStatus: true, hodStatus: true, deptHodStatus: true, checkingBy: true, ccEmpIds: true, ccDepts: true }
+      select: { empId: true, dept: true, assignedDept: true, assignedDepts: true, assignedPersonEmpId: true, isDirectAssign: true, rmStatus: true, hodStatus: true, deptHodStatus: true, checkingBy: true, ccEmpIds: true, ccDepts: true, requestorRole: true }
     });
 
     if (!request) return res.status(404).json({ error: "Request not found." });
@@ -130,6 +130,9 @@ async function authorizeRequestAccess(req, res, next) {
 
     // SuperUser, Admin, and Management see everything
     if (["SuperUser", "Admin", "Management"].includes(role)) return next();
+
+    // Broadcast tickets are visible to all authenticated users — any user can mark them as read
+    if (request.requestorRole === "broadcast") return next();
 
     // Owner can always see their own request
     if (reqOwner && reqOwner === empId) return next();

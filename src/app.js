@@ -89,7 +89,9 @@ const allowedOrigins = [
 app.use(cors({
   origin: (origin, callback) => {
     if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin) || isDev) {
+    // Allow any localhost / 127.0.0.1 origin (Flutter dev server uses a random port)
+    const isLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+    if (allowedOrigins.includes(origin) || isDev || isLocalhost) {
       callback(null, true);
     } else {
       callback(null, false);

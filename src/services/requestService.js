@@ -14,6 +14,22 @@ const { sendNewRequestNotification, sendPushToUser } = require("../utils/pushSer
 
 const WITH_OWNER = { owner: true, closeTicket: true, chatMessages: true, readReceipts: true };
 
+function stripHtml(html) {
+  if (!html) return "";
+  return html
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>/gi, "\n")
+    .replace(/<\/div>/gi, "\n")
+    .replace(/<[^>]*>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 function computeNextRecurringDate(interval) {
   const d = new Date();
   switch (interval) {
@@ -655,8 +671,9 @@ class RequestService {
       include: WITH_OWNER,
     });
 
-    const closureText = note
-      ? `🔒 Resolution submitted by ${user.name} (${user.dept}) — awaiting requestor acknowledgement.\n\nResolution note: ${note}`
+    const plainNote = stripHtml(note);
+    const closureText = plainNote
+      ? `🔒 Resolution submitted by ${user.name} (${user.dept}) — awaiting requestor acknowledgement.\n\nResolution note: ${plainNote}`
       : `🔒 Resolution submitted by ${user.name} (${user.dept}) — awaiting requestor acknowledgement.`;
     await prisma.chatMessage.create({ data: { requestId: reqId, authorId: user.empId, author: user.name, role: user.role, type: "system", text: closureText, fileUrl: fUrl, fileName: fName, isImage: isImg } });
 
@@ -1138,6 +1155,7 @@ class RequestService {
         assignedDept:        user.dept,
         assignedPersonEmpId: user.empId,
         assignedPersonName:  user.name,
+        readReceipts:        { create: { empId: user.empId } },
       },
     });
 
