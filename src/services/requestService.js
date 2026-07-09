@@ -91,7 +91,7 @@ class RequestService {
             { assignedPersonEmpId: { contains: empId } },
             { ccDepts:  { contains: userDept } },
             { ccEmpIds: { contains: empId } },
-            { requestorRole: 'broadcast' },
+            { AND: [{ requestorRole: 'broadcast' }, { ccDepts: "ALL" }] },
           ],
         };
       } else {
@@ -105,7 +105,7 @@ class RequestService {
             { AND: [{ assignedDepts: { contains: userDept } }, { isDirectAssign: false }] },
             { ccDepts:  { contains: userDept } },
             { ccEmpIds: { contains: empId } },
-            { requestorRole: 'broadcast' },
+            { AND: [{ requestorRole: 'broadcast' }, { ccDepts: "ALL" }] },
           ],
         };
       }
@@ -343,7 +343,7 @@ class RequestService {
             { assignedPersonEmpId: { contains: empId } },
             { ccDepts:  { contains: userDept } },
             { ccEmpIds: { contains: empId } },
-            { requestorRole: 'broadcast' },
+            { AND: [{ requestorRole: 'broadcast' }, { ccDepts: "ALL" }] },
           ],
         };
       } else {
@@ -355,7 +355,7 @@ class RequestService {
             { AND: [{ assignedDepts: { contains: userDept } }, { isDirectAssign: false }] },
             { ccDepts:  { contains: userDept } },
             { ccEmpIds: { contains: empId } },
-            { requestorRole: 'broadcast' },
+            { AND: [{ requestorRole: 'broadcast' }, { ccDepts: "ALL" }] },
           ],
         };
       }
@@ -1133,12 +1133,25 @@ class RequestService {
     const baseWhere = { isActive: true, role: "Requestor", empId: { not: user.empId } };
 
     if (!sendToAll) {
-      const orFilters = [];
-      if (targetDepts.length)     orFilters.push({ dept:     { in: targetDepts } });
-      if (targetLocations.length) orFilters.push({ location: { in: targetLocations } });
-      if (targetEmpIds.length)    orFilters.push({ empId:    { in: targetEmpIds } });
-      if (!orFilters.length) throw Object.assign(new Error("Select at least one target."), { status: 400 });
-      baseWhere.OR = orFilters;
+      if (!targetDepts.length && !targetLocations.length && !targetEmpIds.length)
+        throw Object.assign(new Error("Select at least one target."), { status: 400 });
+
+      // Dept + location are AND'd (intersection): e.g. Software dept in Bangalore only.
+      // Individual empIds are always OR'd in on top, so explicitly chosen users are always included.
+      const deptLocFilter = {};
+      if (targetDepts.length)     deptLocFilter.dept     = { in: targetDepts };
+      if (targetLocations.length) deptLocFilter.location = { in: targetLocations };
+
+      if (targetEmpIds.length) {
+        // (dept AND location) OR specific users
+        const clauses = [];
+        if (Object.keys(deptLocFilter).length) clauses.push(deptLocFilter);
+        clauses.push({ empId: { in: targetEmpIds } });
+        baseWhere.OR = clauses;
+      } else {
+        // Dept and/or location only — both applied as AND via top-level merge
+        Object.assign(baseWhere, deptLocFilter);
+      }
     }
 
     const targets = await prisma.user.findMany({
@@ -1177,6 +1190,8 @@ class RequestService {
         assignedDept:        user.dept,
         assignedPersonEmpId: user.empId,
         assignedPersonName:  user.name,
+        ccDepts:             sendToAll ? "ALL" : null,
+        ccEmpIds:            !sendToAll ? targets.map(t => t.empId).join(",") : null,
         readReceipts:        { create: { empId: user.empId } },
       },
     });
@@ -1285,8 +1300,8 @@ class RequestService {
           roleFilter = {};
         } else if (role === "Requestor") {
           roleFilter = isRestricted(userDept)
-            ? { OR: [{ empId }, { assignedPersonEmpId: { contains: empId } }, { ccDepts: { contains: userDept } }, { ccEmpIds: { contains: empId } }, { requestorRole: "broadcast" }] }
-            : { OR: [{ empId }, { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }, { isDirectAssign: false }] }, { assignedPersonEmpId: { contains: empId } }, { AND: [{ assignedDepts: { contains: userDept } }, { isDirectAssign: false }] }, { ccDepts: { contains: userDept } }, { ccEmpIds: { contains: empId } }, { requestorRole: "broadcast" }] };
+            ? { OR: [{ empId }, { assignedPersonEmpId: { contains: empId } }, { ccDepts: { contains: userDept } }, { ccEmpIds: { contains: empId } }, { AND: [{ requestorRole: "broadcast" }, { ccDepts: "ALL" }] }] }
+            : { OR: [{ empId }, { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }, { isDirectAssign: false }] }, { assignedPersonEmpId: { contains: empId } }, { AND: [{ assignedDepts: { contains: userDept } }, { isDirectAssign: false }] }, { ccDepts: { contains: userDept } }, { ccEmpIds: { contains: empId } }, { AND: [{ requestorRole: "broadcast" }, { ccDepts: "ALL" }] }] };
         } else if (role === "DeptHOD") {
           roleFilter = { OR: [
             { AND: [{ empId }, { dept: userDept }] },
