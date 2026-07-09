@@ -432,8 +432,29 @@ class RequestService {
     return formatRequest(row, user.empId);
   }
 
+  async getThread(requestId, viewerEmpId) {
+    const current = await prisma.request.findUnique({ where: { id: requestId }, select: { threadParentId: true } });
+    if (!current) throw Object.assign(new Error("Request not found."), { status: 404 });
+
+    const rootId = current.threadParentId ?? requestId;
+
+    // All thread members except the current request (root + all replies)
+    const members = await prisma.request.findMany({
+      where: { OR: [{ id: rootId }, { threadParentId: rootId }], NOT: { id: requestId } },
+      include: WITH_OWNER,
+      orderBy: { id: "asc" },
+    });
+
+    return {
+      rootId,
+      isReply:     current.threadParentId != null,
+      replyCount:  members.length + 1, // total members including self
+      members:     members.map(m => formatRequest(m, viewerEmpId)),
+    };
+  }
+
   async create(user, data, uploadedFiles, req) {
-    const { purpose, description, assignedDept, assignedDepts, dueDate, assignedPersonEmpId, assignedPersonName, ccDepts, ccEmpIds, ccPersonNames, isRecurring, recurringInterval } = data;
+    const { purpose, description, assignedDept, assignedDepts, dueDate, assignedPersonEmpId, assignedPersonName, ccDepts, ccEmpIds, ccPersonNames, isRecurring, recurringInterval, threadParentId } = data;
 
     const files = Array.isArray(uploadedFiles) ? uploadedFiles : (uploadedFiles ? [uploadedFiles] : []);
     const first = files[0] ?? null;
@@ -464,6 +485,7 @@ class RequestService {
         isRecurring:         recurring,
         recurringInterval:   recurring ? (recurringInterval || null) : null,
         nextRecurringDate:   nextDate,
+        threadParentId:      threadParentId ? Number(threadParentId) : null,
         readReceipts:        { create: { empId: user.empId } },
       },
       include: WITH_OWNER,

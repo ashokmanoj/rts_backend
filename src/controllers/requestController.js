@@ -220,6 +220,17 @@ async function attachAfterClose(req, res, next) {
   }
 }
 
+async function getThread(req, res, next) {
+  try {
+    const reqId = Number(req.params.id);
+    const result = await requestService.getThread(reqId, req.user.empId);
+    res.json(result);
+  } catch (err) {
+    if (err.status === 404) return res.status(404).json({ error: err.message });
+    next(err);
+  }
+}
+
 async function stopRecurring(req, res, next) {
   try {
     const reqId = Number(req.params.id);
@@ -233,4 +244,4 @@ async function stopRecurring(req, res, next) {
   }
 }
 
-module.exports = { getAll, getById, getFilterOptions, getRoleCounts, create, approval, markSeen, markUnread, close, getHodPending, hodApproval, acknowledge, getUsersByDept, getDepartments, getLocations, deleteRequest, editRequest, stopRecurring, broadcastUsers, broadcastSend, attachAfterClose };
+module.exports = { getAll, getById, getThread, getFilterOptions, getRoleCounts, create, approval, markSeen, markUnread, close, getHodPending, hodApproval, acknowledge, getUsersByDept, getDepartments, getLocations, deleteRequest, editRequest, stopRecurring, broadcastUsers, broadcastSend, attachAfterClose };

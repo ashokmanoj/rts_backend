@@ -175,6 +175,11 @@ model Request {
   // Reopen tracking
   reopenedAt         DateTime? @map("reopened_at")
 
+  // Thread / trailing-mail linking
+  threadParentId     Int?      @map("thread_parent_id")
+  threadParent       Request?  @relation("RequestThread", fields: [threadParentId], references: [id])
+  threadReplies      Request[] @relation("RequestThread")
+
   owner        User          @relation("RequestOwner", fields: [empId], references: [empId])
   chatMessages ChatMessage[]
   closeTicket  CloseTicket?

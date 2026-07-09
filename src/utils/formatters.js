@@ -116,6 +116,10 @@ function formatRequest(row, viewerEmpId) {
     recurringInterval:  row.recurringInterval ?? null,
     recurringParentId:  row.recurringParentId ?? null,
 
+    // Thread linking
+    threadParentId:    row.threadParentId   ?? null,
+    threadReplyCount:  row._count?.threadReplies ?? 0,
+
     // GN-route: requestor's RM or HOD is GN-01 or GN-02 → goes to Management portal
     isGnRoute: !!(["GN-01", "GN-02"].includes(row.owner?.rmEmpId) || ["GN-01", "GN-02"].includes(row.owner?.hodEmpId)),
 

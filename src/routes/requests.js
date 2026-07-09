@@ -38,6 +38,9 @@ router.patch("/:id/hod-approval", authorize("Management"), authorizeRequestAcces
 // GET single request by ID
 router.get("/:id", authorizeRequestAccess, ctrl.getById);
 
+// GET thread members for a request
+router.get("/:id/thread", authorizeRequestAccess, ctrl.getThread);
+
 // CREATE request (with optional files — up to 10)
 router.post("/", upload.array("files", 10), ctrl.create);
 
