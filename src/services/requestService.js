@@ -587,7 +587,8 @@ class RequestService {
         ? existing.assignedPersonEmpId.split(",").map(s => s.trim()).includes(user.empId)
         : false;
       const canFacilitiesForward = isTeamMember && user.dept === "Facilities" && decision === "Forwarded";
-      if (!((isTeamMember || isAssigned) && decision === "Checking") && !canFacilitiesForward) {
+      const canAssignedForward   = isAssigned && decision === "Forwarded";
+      if (!((isTeamMember || isAssigned) && decision === "Checking") && !canFacilitiesForward && !canAssignedForward) {
         throw new Error("Unauthorized approval.");
       }
     }
