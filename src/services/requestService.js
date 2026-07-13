@@ -288,21 +288,29 @@ class RequestService {
 
     let searchFilter = {};
     if (search && search.trim()) {
-      const term  = search.trim();
-      const numId = /^\d+$/.test(term) ? parseInt(term, 10) : null;
-      searchFilter = {
-        OR: [
-          ...(numId !== null ? [{ id: numId }] : []),
-          { purpose:     { contains: term, mode: "insensitive" } },
-          { description: { contains: term, mode: "insensitive" } },
-          { empId:       { contains: term, mode: "insensitive" } },
-          { owner: { name: { contains: term, mode: "insensitive" } } },
-        ],
-      };
+      const term    = search.trim();
+      const hashId  = /^#(\d+)$/.test(term) ? parseInt(term.slice(1), 10) : null;
+      const numId   = hashId === null && /^\d+$/.test(term) ? parseInt(term, 10) : null;
+      if (hashId !== null) {
+        // #23 → exact ticket only
+        searchFilter = { id: hashId };
+      } else if (numId !== null) {
+        // 23 → exact ticket only
+        searchFilter = { id: numId };
+      } else {
+        searchFilter = {
+          OR: [
+            { purpose:     { contains: term, mode: "insensitive" } },
+            { description: { contains: term, mode: "insensitive" } },
+            { empId:       { contains: term, mode: "insensitive" } },
+            { owner: { name: { contains: term, mode: "insensitive" } } },
+          ],
+        };
+      }
     }
 
     const andClauses = [roleFilter, closureFilter, ...extraFilters];
-    if (searchFilter.OR) andClauses.push(searchFilter);
+    if (Object.keys(searchFilter).length > 0) andClauses.push(searchFilter);
     const where = { AND: andClauses.filter(f => Object.keys(f).length > 0) };
 
     const order = sortOrder === "asc" ? "asc" : "desc";
