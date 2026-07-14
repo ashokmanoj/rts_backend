@@ -197,37 +197,69 @@ class RequestService {
       extraFilters.push({ isClosed: false });
     }
 
-    // Requestor Dept Status — "Open" (--) means BOTH rm and hod haven't acted;
-    // "ack_pending" = Pending Acknowledgement; "not_approved" = neither rm nor hod is Approved; others = either rm or hod matches
+    // Requestor Dept Status — role-aware:
+    //   RM      → filters only rmStatus
+    //   HOD     → filters only hodStatus
+    //   others  → filters across both rmStatus + hodStatus
     if (rmActive.length > 0) {
       const hasOpen        = rmActive.includes("--");
       const hasAckPending  = rmActive.includes("ack_pending");
       const hasNotApproved = rmActive.includes("not_approved");
       const others         = rmActive.filter(s => s !== "--" && s !== "ack_pending" && s !== "not_approved");
       const clauses        = [];
-      if (hasOpen)          clauses.push({ AND: [{ rmStatus: "--" }, { hodStatus: "--" }] });
-      if (hasAckPending)    clauses.push({ assignedStatus: "Pending Acknowledgement" });
-      if (hasNotApproved)   clauses.push({ AND: [{ rmStatus: { not: "Approved" } }, { hodStatus: { not: "Approved" } }] });
-      if (others.length === 1)  clauses.push({ OR: [{ rmStatus: others[0] }, { hodStatus: others[0] }] });
-      if (others.length  > 1)  clauses.push({ OR: [{ rmStatus: { in: others } }, { hodStatus: { in: others } }] });
+      if (role === "RM") {
+        if (hasOpen)                clauses.push({ rmStatus: "--" });
+        if (hasNotApproved)         clauses.push({ rmStatus: { not: "Approved" } });
+        if (others.length === 1)    clauses.push({ rmStatus: others[0] });
+        if (others.length  > 1)     clauses.push({ rmStatus: { in: others } });
+      } else if (role === "HOD") {
+        if (hasOpen)                clauses.push({ hodStatus: "--" });
+        if (hasNotApproved)         clauses.push({ hodStatus: { not: "Approved" } });
+        if (others.length === 1)    clauses.push({ hodStatus: others[0] });
+        if (others.length  > 1)     clauses.push({ hodStatus: { in: others } });
+      } else {
+        if (hasOpen)                clauses.push({ AND: [{ rmStatus: "--" }, { hodStatus: "--" }] });
+        if (hasNotApproved)         clauses.push({ AND: [{ rmStatus: { not: "Approved" } }, { hodStatus: { not: "Approved" } }] });
+        if (others.length === 1)    clauses.push({ OR: [{ rmStatus: others[0] }, { hodStatus: others[0] }] });
+        if (others.length  > 1)     clauses.push({ OR: [{ rmStatus: { in: others } }, { hodStatus: { in: others } }] });
+      }
+      if (hasAckPending) clauses.push({ assignedStatus: "Pending Acknowledgement" });
       extraFilters.push(clauses.length === 1 ? clauses[0] : { OR: clauses });
     }
 
-    // Assigned Dept Status — "Open" (--) means ALL three assigned-dept fields haven't acted;
-    // "ack_pending" = Pending Acknowledgement; "not_approved" = none of the three is Approved; others = ANY of the three matches
+    // Assigned Dept Status — role-aware:
+    //   RM      → filters only assignedRmStatus
+    //   HOD     → filters only assignedHodStatus
+    //   DeptHOD → filters only deptHodStatus
+    //   others  → filters across all three (assignedRmStatus, assignedHodStatus, deptHodStatus)
     if (deptHodActive.length > 0) {
       const hasOpen        = deptHodActive.includes("--");
       const hasAckPending  = deptHodActive.includes("ack_pending");
       const hasNotApproved = deptHodActive.includes("not_approved");
       const others         = deptHodActive.filter(s => s !== "--" && s !== "ack_pending" && s !== "not_approved");
       const clauses        = [];
-      // "Open" = assigned RM, assigned HOD AND DeptHOD are all still pending
-      if (hasOpen)        clauses.push({ AND: [{ assignedRmStatus: "--" }, { assignedHodStatus: "--" }, { deptHodStatus: "--" }] });
-      if (hasAckPending)  clauses.push({ assignedStatus: "Pending Acknowledgement" });
-      if (hasNotApproved) clauses.push({ AND: [{ assignedRmStatus: { not: "Approved" } }, { assignedHodStatus: { not: "Approved" } }, { deptHodStatus: { not: "Approved" } }] });
-      // Other statuses = any of the three assigned-dept fields has that status
-      if (others.length === 1) clauses.push({ OR: [{ assignedRmStatus: others[0] }, { assignedHodStatus: others[0] }, { deptHodStatus: others[0] }] });
-      if (others.length  > 1) clauses.push({ OR: [{ assignedRmStatus: { in: others } }, { assignedHodStatus: { in: others } }, { deptHodStatus: { in: others } }] });
+      if (role === "RM") {
+        if (hasOpen)                clauses.push({ assignedRmStatus: "--" });
+        if (hasNotApproved)         clauses.push({ assignedRmStatus: { not: "Approved" } });
+        if (others.length === 1)    clauses.push({ assignedRmStatus: others[0] });
+        if (others.length  > 1)     clauses.push({ assignedRmStatus: { in: others } });
+      } else if (role === "HOD") {
+        if (hasOpen)                clauses.push({ assignedHodStatus: "--" });
+        if (hasNotApproved)         clauses.push({ assignedHodStatus: { not: "Approved" } });
+        if (others.length === 1)    clauses.push({ assignedHodStatus: others[0] });
+        if (others.length  > 1)     clauses.push({ assignedHodStatus: { in: others } });
+      } else if (role === "DeptHOD") {
+        if (hasOpen)                clauses.push({ deptHodStatus: "--" });
+        if (hasNotApproved)         clauses.push({ deptHodStatus: { not: "Approved" } });
+        if (others.length === 1)    clauses.push({ deptHodStatus: others[0] });
+        if (others.length  > 1)     clauses.push({ deptHodStatus: { in: others } });
+      } else {
+        if (hasOpen)                clauses.push({ AND: [{ assignedRmStatus: "--" }, { assignedHodStatus: "--" }, { deptHodStatus: "--" }] });
+        if (hasNotApproved)         clauses.push({ AND: [{ assignedRmStatus: { not: "Approved" } }, { assignedHodStatus: { not: "Approved" } }, { deptHodStatus: { not: "Approved" } }] });
+        if (others.length === 1)    clauses.push({ OR: [{ assignedRmStatus: others[0] }, { assignedHodStatus: others[0] }, { deptHodStatus: others[0] }] });
+        if (others.length  > 1)     clauses.push({ OR: [{ assignedRmStatus: { in: others } }, { assignedHodStatus: { in: others } }, { deptHodStatus: { in: others } }] });
+      }
+      if (hasAckPending) clauses.push({ assignedStatus: "Pending Acknowledgement" });
       extraFilters.push(clauses.length === 1 ? clauses[0] : { OR: clauses });
     }
 
