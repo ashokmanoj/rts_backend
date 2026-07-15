@@ -73,7 +73,7 @@ class RequestService {
 
     // Requestor depts where visibility is restricted to own + assigned only
     const RESTRICTED_REQUESTOR_PREFIXES = ["Operations-", "Academics-", "Stores-"];
-    const RESTRICTED_REQUESTOR_EXACT    = new Set(["Game Development", "Software", "Animation", "Management", "HR", "Purchase"]);
+    const RESTRICTED_REQUESTOR_EXACT    = new Set(["Game Development", "Software", "Animation", "Management", "Purchase", "HR"]);
     const isRestrictedRequestorDept = (dept) =>
       RESTRICTED_REQUESTOR_PREFIXES.some(p => dept?.startsWith(p)) ||
       RESTRICTED_REQUESTOR_EXACT.has(dept);
@@ -95,8 +95,8 @@ class RequestService {
           ],
         };
       } else {
-        // Other depts (HR, Purchase, Broadcasting, etc.):
-        // own + incoming to their dept (no person assigned) + assigned + forwarding chain
+        // Other depts (HR, Broadcasting, etc.):
+        // own + incoming to their dept (cross-dept + same-dept) + assigned + forwarding chain
         roleFilter = {
           OR: [
             { empId },
@@ -1146,7 +1146,14 @@ class RequestService {
       throw Object.assign(new Error("Not authorized."), { status: 403 });
     }
     const users = await prisma.user.findMany({
-      where:   { isActive: true, role: "Requestor", empId: { not: user.empId } },
+      where:   {
+        isActive: true,
+        empId:    { not: user.empId },
+        OR: [
+          { role: "Requestor" },
+          { userRoles: { some: { role: "Requestor", isActive: true } } },
+        ],
+      },
       select:  { empId: true, name: true, dept: true, location: true },
       orderBy: [{ dept: "asc" }, { name: "asc" }],
     });
@@ -1170,8 +1177,15 @@ class RequestService {
 
     if (!title?.trim()) throw Object.assign(new Error("Title is required."), { status: 400 });
 
-    // Only Requestor-role users receive broadcasts
-    const baseWhere = { isActive: true, role: "Requestor", empId: { not: user.empId } };
+    // Users with Requestor role (primary or secondary) receive broadcasts
+    const baseWhere = {
+      isActive: true,
+      empId:    { not: user.empId },
+      OR: [
+        { role: "Requestor" },
+        { userRoles: { some: { role: "Requestor", isActive: true } } },
+      ],
+    };
 
     if (!sendToAll) {
       if (!targetDepts.length && !targetLocations.length && !targetEmpIds.length)
