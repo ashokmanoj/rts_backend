@@ -1254,7 +1254,7 @@ class RequestService {
     // Notify all matched Requestors via push — no extra DB records created
     const pushPayload = {
       title:              title.trim(),
-      body:               description?.trim() || `Broadcast from ${user.dept} Department`,
+      body:               stripHtml(description) || `Broadcast from ${user.dept} Department`,
       icon:               "/rtsLogo.png",
       badge:              "/rtsLogo.png",
       tag:                `broadcast-${Date.now()}`,
