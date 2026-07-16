@@ -85,25 +85,24 @@ class RequestService {
       if (isRestrictedRequestorDept(userDept)) {
         // Restricted depts (Operations, Academics, Game Development, Software, Animation):
         // own requests + specifically assigned only — no dept-wide visibility
+        // CC dept visibility is limited to RM/HOD; Requestors only see explicit personal CC
         roleFilter = {
           OR: [
             { empId },
             { assignedPersonEmpId: { contains: empId } },
-            { ccDepts:  { contains: userDept } },
             { ccEmpIds: { contains: empId } },
             { AND: [{ requestorRole: 'broadcast' }, { ccDepts: "ALL" }] },
           ],
         };
       } else {
-        // Other depts (HR, Broadcasting, etc.):
-        // own + incoming to their dept (cross-dept + same-dept) + assigned + forwarding chain
+        // Other depts: own + incoming to their dept (cross-dept + same-dept) + assigned + forwarding chain
+        // CC dept visibility is limited to RM/HOD; Requestors only see explicit personal CC
         roleFilter = {
           OR: [
             { empId },
             { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }, { isDirectAssign: false }] },
             { assignedPersonEmpId: { contains: empId } },
             { AND: [{ assignedDepts: { contains: userDept } }, { isDirectAssign: false }] },
-            { ccDepts:  { contains: userDept } },
             { ccEmpIds: { contains: empId } },
             { AND: [{ requestorRole: 'broadcast' }, { ccDepts: "ALL" }] },
           ],
