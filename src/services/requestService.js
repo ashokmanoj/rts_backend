@@ -976,8 +976,11 @@ class RequestService {
 
     const existing = await prisma.request.findUnique({ where: { id: reqId } });
     if (!existing) throw new Error("Request not found.");
-    if (existing.assignedStatus !== "Pending Acknowledgement")
-      throw new Error("No pending acknowledgement for this ticket.");
+    // Allow acknowledgement for tickets pending ack OR directly rejected/closed by staff
+    const canAcknowledge =
+      existing.assignedStatus === "Pending Acknowledgement" ||
+      (existing.isClosed && !existing.acknowledgement);
+    if (!canAcknowledge) throw new Error("No pending acknowledgement for this ticket.");
     if (existing.empId !== user.empId) throw new Error("Only the requestor can acknowledge.");
 
     const now = new Date();
