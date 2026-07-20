@@ -475,7 +475,13 @@ class RequestService {
     const current = await prisma.request.findUnique({ where: { id: requestId }, select: { threadParentId: true } });
     if (!current) throw Object.assign(new Error("Request not found."), { status: 404 });
 
-    const rootId = current.threadParentId ?? requestId;
+    // Chase up to the true root — handles chains where a child's threadParentId points
+    // to another child instead of the root (e.g. legacy data before the root-resolution fix)
+    let rootId = current.threadParentId ?? requestId;
+    if (current.threadParentId) {
+      const parent = await prisma.request.findUnique({ where: { id: current.threadParentId }, select: { threadParentId: true } });
+      if (parent?.threadParentId) rootId = parent.threadParentId;
+    }
 
     // All thread members except the current request (root + all replies)
     const members = await prisma.request.findMany({
@@ -535,7 +541,7 @@ class RequestService {
         isRecurring:         recurring,
         recurringInterval:   recurring ? (recurringInterval || null) : null,
         nextRecurringDate:   nextDate,
-        threadParentId:      threadParentId ? Number(threadParentId) : null,
+        threadParentId:      resolvedThreadParentId,
         readReceipts:        { create: { empId: user.empId } },
       },
       include: WITH_OWNER,
