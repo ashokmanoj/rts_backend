@@ -12,7 +12,7 @@ const { formatRequest } = require("../utils/formatters");
 const { parsePagination, buildPageResponse } = require("../utils/paginate");
 const { sendNewRequestNotification, sendPushToUser } = require("../utils/pushService");
 
-const WITH_OWNER = { owner: true, closeTicket: true, chatMessages: true, readReceipts: true };
+const WITH_OWNER = { owner: true, closeTicket: true, chatMessages: true, readReceipts: true, _count: { select: { threadReplies: true } } };
 
 function stripHtml(html) {
   if (!html) return "";
@@ -500,6 +500,17 @@ class RequestService {
 
     const recurring = isRecurring === true || isRecurring === "true";
     const nextDate  = recurring ? computeNextRecurringDate(recurringInterval) : null;
+
+    // If parent is itself a reply, resolve to the root so all thread members
+    // always point to the same root request (enables chain tracking)
+    let resolvedThreadParentId = threadParentId ? Number(threadParentId) : null;
+    if (resolvedThreadParentId) {
+      const parent = await prisma.request.findUnique({
+        where:  { id: resolvedThreadParentId },
+        select: { threadParentId: true },
+      });
+      if (parent?.threadParentId) resolvedThreadParentId = parent.threadParentId;
+    }
 
     const request = await prisma.request.create({
       data: {
