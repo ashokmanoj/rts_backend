@@ -78,6 +78,9 @@ class RequestService {
       RESTRICTED_REQUESTOR_PREFIXES.some(p => dept?.startsWith(p)) ||
       RESTRICTED_REQUESTOR_EXACT.has(dept);
 
+    // Accounts depts (Accounts-G, Accounts-A, etc.) get full CC dept visibility like RM/HOD
+    const isAccountsDept = userDept?.startsWith("Accounts-");
+
     let roleFilter = {};
     if (role === "SuperUser" || role === "Management" || role === "Admin") {
       roleFilter = {};
@@ -96,7 +99,7 @@ class RequestService {
         };
       } else {
         // Other depts: own + incoming to their dept (cross-dept + same-dept) + assigned + forwarding chain
-        // CC dept visibility is limited to RM/HOD; Requestors only see explicit personal CC
+        // Accounts depts additionally see all CC'd requests for their dept
         roleFilter = {
           OR: [
             { empId },
@@ -105,6 +108,7 @@ class RequestService {
             { AND: [{ assignedDepts: { contains: userDept } }, { isDirectAssign: false }] },
             { ccEmpIds: { contains: empId } },
             { AND: [{ requestorRole: 'broadcast' }, { ccDepts: "ALL" }] },
+            ...(isAccountsDept ? [{ ccDepts: { contains: userDept } }] : []),
           ],
         };
       }

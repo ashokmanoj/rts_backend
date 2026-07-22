@@ -40,7 +40,7 @@ async function sendFcmToUser(empId, payload) {
               sound:     "default",
               channelId: payload.data?.channel_id || "rts_notifications",
               icon:      payload.icon || "rtsLogo",
-              sticky:    payload.data?.sticky || true
+              sticky:    true,
             },
             priority: "high",
           },
