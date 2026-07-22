@@ -125,7 +125,7 @@ class RequestService {
       roleFilter = {
         OR: [
           { AND: [{ empId }, { dept: userDept }] },
-          { AND: [{ owner: { rmEmpId: empId } }, { dept: userDept }] },
+          { AND: [{ owner: { rmEmpId: empId } }, { dept: userDept }, { assignedDept: { not: "Management" } }] },
           { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }, { isDirectAssign: false }] },
           { AND: [{ assignedDepts: { contains: userDept } }, { dept: { not: userDept } }, { isDirectAssign: false }] },
           { AND: [{ owner: { rmEmpId: empId } }, { assignedDepts: { contains: userDept } }, { isDirectAssign: false }] },
@@ -137,7 +137,7 @@ class RequestService {
       roleFilter = {
         OR: [
           { AND: [{ empId }, { dept: userDept }] },
-          { AND: [{ owner: { hodEmpId: empId } }, { dept: userDept }] },
+          { AND: [{ owner: { hodEmpId: empId } }, { dept: userDept }, { assignedDept: { not: "Management" } }] },
           { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }, { isDirectAssign: false }] },
           { AND: [{ assignedDepts: { contains: userDept } }, { dept: { not: userDept } }, { isDirectAssign: false }] },
           { AND: [{ owner: { hodEmpId: empId } }, { assignedDepts: { contains: userDept } }, { isDirectAssign: false }] },
@@ -415,7 +415,7 @@ class RequestService {
       roleFilter = {
         OR: [
           { AND: [{ empId }, { dept: userDept }] },
-          { AND: [{ owner: { rmEmpId: empId } }, { dept: userDept }] },
+          { AND: [{ owner: { rmEmpId: empId } }, { dept: userDept }, { assignedDept: { not: "Management" } }] },
           { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }, { isDirectAssign: false }] },
           { AND: [{ assignedDepts: { contains: userDept } }, { dept: { not: userDept } }, { isDirectAssign: false }] },
           { AND: [{ owner: { rmEmpId: empId } }, { assignedDepts: { contains: userDept } }, { isDirectAssign: false }] },
@@ -427,7 +427,7 @@ class RequestService {
       roleFilter = {
         OR: [
           { AND: [{ empId }, { dept: userDept }] },
-          { AND: [{ owner: { hodEmpId: empId } }, { dept: userDept }] },
+          { AND: [{ owner: { hodEmpId: empId } }, { dept: userDept }, { assignedDept: { not: "Management" } }] },
           { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }, { isDirectAssign: false }] },
           { AND: [{ assignedDepts: { contains: userDept } }, { dept: { not: userDept } }, { isDirectAssign: false }] },
           { AND: [{ owner: { hodEmpId: empId } }, { assignedDepts: { contains: userDept } }, { isDirectAssign: false }] },

@@ -147,7 +147,9 @@ async function authorizeRequestAccess(req, res, next) {
           assignedDeptsArr.includes(userDept)          // forwarding chain
         );
       } else {
-        deptMatch = userDept && (reqDept === userDept || reqAssigned === userDept || assignedDeptsArr.includes(userDept));
+        // Management-assigned requests are private — only requestor + Management role can see them
+        const mgmtPrivate = reqAssigned === "Management" && userDept !== "Management";
+        deptMatch = userDept && !mgmtPrivate && (reqDept === userDept || reqAssigned === userDept || assignedDeptsArr.includes(userDept));
       }
       if (deptMatch) return next();
       // Already acted — allow continued access even if request was forwarded away from their dept
@@ -164,8 +166,9 @@ async function authorizeRequestAccess(req, res, next) {
           select: { rmEmpId: true, hodEmpId: true },
         });
         if (owner) {
-          if (role === "RM"  && owner.rmEmpId  === empId && reqDept === userDept) return next();
-          if (role === "HOD" && owner.hodEmpId === empId && reqDept === userDept) return next();
+          const mgmtPrivate = reqAssigned === "Management" && userDept !== "Management";
+          if (role === "RM"  && owner.rmEmpId  === empId && reqDept === userDept && !mgmtPrivate) return next();
+          if (role === "HOD" && owner.hodEmpId === empId && reqDept === userDept && !mgmtPrivate) return next();
         }
       }
     }
