@@ -3,40 +3,27 @@
 /**
  * Auto-Close Cron
  * ───────────────
- * Runs every hour. Finds tickets stuck in "Pending Acknowledgement" for more
- * than 3 days and automatically closes them, posting a system chat message
- * and sending a push notification to the requestor.
+ * Runs every hour. Finds tickets stuck in "Pending Acknowledgement" and
+ * automatically closes them based on dept-specific thresholds:
+ *   - RTS Help Desk: 5 days
+ *   - All other depts: 3 days
  */
 
 const cron   = require("node-cron");
 const prisma = require("../config/database");
 const { sendPushToUser } = require("./pushService");
 
-const AUTO_CLOSE_DAYS = 3;
+const AUTO_CLOSE_DAYS         = 3;
+const RTS_HELPDESK_CLOSE_DAYS = 5;
+const RTS_HELPDESK_DEPT       = "RTS Help Desk";
 
-async function runAutoCloseJob() {
-  const cutoff = new Date(Date.now() - AUTO_CLOSE_DAYS * 24 * 60 * 60 * 1000);
-
-  const stale = await prisma.request.findMany({
-    where: {
-      assignedStatus: "Pending Acknowledgement",
-      isClosed:       false,
-      resolvedDate:   { lte: cutoff },
-      assignedDept:   { not: "RTS Help Desk" },
-    },
-    include: { owner: true },
-  });
-
-  if (!stale.length) return;
-  console.log(`🤖 Auto-close cron: ${stale.length} ticket(s) pending acknowledgement for 3+ days`);
-
-  for (const req of stale) {
+async function closeStaleTickets(tickets, days) {
+  for (const req of tickets) {
     try {
       const now     = new Date();
       const dateStr = now.toLocaleDateString("en-IN");
 
       await prisma.$transaction([
-        // Close the ticket — same fields as manual "Resolved" acknowledgement
         prisma.request.update({
           where: { id: req.id },
           data: {
@@ -47,7 +34,6 @@ async function runAutoCloseJob() {
           },
         }),
 
-        // System message visible in the ticket chat
         prisma.chatMessage.create({
           data: {
             requestId: req.id,
@@ -55,19 +41,16 @@ async function runAutoCloseJob() {
             author:    "System",
             role:      "System",
             type:      "system",
-            text:
-              `🤖 This ticket was automatically closed by the system because no response was received within ${AUTO_CLOSE_DAYS} days of the resolution being submitted. The ticket has been marked as resolved.`,
+            text:      `🤖 This ticket was automatically closed by the system because no response was received within ${days} days of the resolution being submitted. The ticket has been marked as resolved.`,
           },
         }),
 
-        // Reset read receipts so the requestor sees the auto-close as unread
         prisma.requestRead.deleteMany({ where: { requestId: req.id } }),
       ]);
 
-      // Push notification to the original requestor (non-blocking)
       sendPushToUser(req.empId, {
         title: `Ticket #${req.id} Auto-Closed`,
-        body:  `Your ticket "${req.purpose}" was automatically closed because no acknowledgement was received within ${AUTO_CLOSE_DAYS} days. It has been marked as resolved.`,
+        body:  `Your ticket "${req.purpose}" was automatically closed because no acknowledgement was received within ${days} days. It has been marked as resolved.`,
         data:  { requestId: req.id },
       }).catch(() => {});
 
@@ -78,12 +61,46 @@ async function runAutoCloseJob() {
   }
 }
 
+async function runAutoCloseJob() {
+  const cutoff3 = new Date(Date.now() - AUTO_CLOSE_DAYS         * 24 * 60 * 60 * 1000);
+  const cutoff5 = new Date(Date.now() - RTS_HELPDESK_CLOSE_DAYS * 24 * 60 * 60 * 1000);
+
+  // All depts except RTS Help Desk — 3-day threshold
+  const stale = await prisma.request.findMany({
+    where: {
+      assignedStatus: "Pending Acknowledgement",
+      isClosed:       false,
+      resolvedDate:   { lte: cutoff3 },
+      assignedDept:   { not: RTS_HELPDESK_DEPT },
+    },
+    include: { owner: true },
+  });
+
+  // RTS Help Desk only — 5-day threshold
+  const staleHelpdesk = await prisma.request.findMany({
+    where: {
+      assignedStatus: "Pending Acknowledgement",
+      isClosed:       false,
+      resolvedDate:   { lte: cutoff5 },
+      assignedDept:   RTS_HELPDESK_DEPT,
+    },
+    include: { owner: true },
+  });
+
+  const total = stale.length + staleHelpdesk.length;
+  if (!total) return;
+
+  console.log(`🤖 Auto-close cron: ${stale.length} ticket(s) at 3-day threshold, ${staleHelpdesk.length} at 5-day threshold`);
+
+  await closeStaleTickets(stale,         AUTO_CLOSE_DAYS);
+  await closeStaleTickets(staleHelpdesk, RTS_HELPDESK_CLOSE_DAYS);
+}
+
 function startAutoCloseCron() {
-  // Run every hour at minute 0
   cron.schedule("0 * * * *", () => {
     runAutoCloseJob().catch(err => console.error("Auto-close cron error:", err.message));
   });
-  console.log(`🤖 Auto-close cron started (hourly) — closes tickets unacknowledged for ${AUTO_CLOSE_DAYS}+ days`);
+  console.log(`🤖 Auto-close cron started (hourly) — ${AUTO_CLOSE_DAYS}-day default, ${RTS_HELPDESK_CLOSE_DAYS}-day for ${RTS_HELPDESK_DEPT}`);
 }
 
 module.exports = { startAutoCloseCron };
