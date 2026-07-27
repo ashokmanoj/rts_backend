@@ -39,6 +39,7 @@ class AdminService {
         empId: user.empId,
         dept: user.dept,
         phone: user.phone || "N/A",
+        altPhone: user.altPhone || "",
         email: user.email,
         role: user.role,
         designation: user.designation,
@@ -87,7 +88,7 @@ class AdminService {
   }
 
   async createUser(data) {
-    const { empId, name, email, phone, role, dept, designation, location, password, rmEmpId, hodEmpId } = data;
+    const { empId, name, email, phone, altPhone, role, dept, designation, location, password, rmEmpId, hodEmpId } = data;
     const existing = await prisma.user.findFirst({ where: { OR: [{ empId }, { email: { equals: email.trim(), mode: "insensitive" } }] } });
     if (existing) throw new Error("User with this Employee ID or Email already exists.");
 
@@ -107,6 +108,7 @@ class AdminService {
         name,
         email: email.toLowerCase(),
         phone,
+        altPhone: altPhone || null,
         role: role || roles.REQUESTOR,
         dept: dept || "Other",
         designation,
@@ -133,7 +135,7 @@ class AdminService {
   }
 
   async updateUser(empId, data) {
-    const { name, email, phone, role, dept, designation, location, rmEmpId, hodEmpId } = data;
+    const { name, email, phone, altPhone, role, dept, designation, location, rmEmpId, hodEmpId } = data;
 
     if (rmEmpId) {
       const rm = await prisma.user.findUnique({ where: { empId: rmEmpId } });
@@ -150,6 +152,7 @@ class AdminService {
         name,
         email: email?.toLowerCase(),
         phone,
+        altPhone: altPhone || null,
         role,
         dept,
         designation,

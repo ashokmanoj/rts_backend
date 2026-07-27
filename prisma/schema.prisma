@@ -40,6 +40,7 @@ model User {
   name         String
   email        String   @unique
   phone        String?
+  altPhone     String?  @map("alt_phone")
   passwordHash String   @map("password_hash")
   role         Role     @default(Requestor)
   dept         String
