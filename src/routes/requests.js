@@ -44,6 +44,9 @@ router.get("/:id/thread", authorizeRequestAccess, ctrl.getThread);
 // CREATE request (with optional files — up to 10)
 router.post("/", upload.array("files", 10), ctrl.create);
 
+// CREATE trailing (thread) request — same controller, distinct URL to avoid confusion with regular create
+router.post("/trailingreq", upload.array("files", 10), ctrl.create);
+
 // APPROVAL flow
 router.patch("/:id/approval", authorizeRequestAccess, ctrl.approval);
 

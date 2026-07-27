@@ -1077,7 +1077,8 @@ class RequestService {
       distinct: ["dept"],
       orderBy: { dept: "asc" },
     });
-    return users.map(u => u.dept).filter(Boolean).sort();
+    const fromDb = users.map(u => u.dept).filter(Boolean);
+    return [...new Set([...fromDb, "Operations-Sundargarh Odisha"])].sort();
   }
 
   async getLocations() {
@@ -1087,7 +1088,8 @@ class RequestService {
       distinct: ["location"],
       orderBy: { location: "asc" },
     });
-    return users.map(u => u.location).filter(Boolean).sort();
+    const fromDb = users.map(u => u.location).filter(Boolean);
+    return [...new Set([...fromDb, "Sundargarh Odisha"])].sort();
   }
 
   async markSeen(requestId, empId) {
