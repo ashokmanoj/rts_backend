@@ -1,5 +1,5 @@
 const router = require("express").Router({ caseSensitive: true });
-const { getUserLogReport, createUser, bulkCreateUsers, toggleUserStatus, getDeptTrackingReport, updateUser, resetPassword, getUserRoles, addUserRole, updateUserRole, toggleUserRole, deleteUserRole, getDepartments, createDepartment, updateDepartment, deleteDepartment, getLocations, createLocation, updateLocation, deleteLocation } = require("../controllers/adminController");
+const { getUserLogReport, createUser, bulkCreateUsers, toggleUserStatus, getDeptTrackingReport, updateUser, resetPassword, getUserRoles, addUserRole, updateUserRole, toggleUserRole, deleteUserRole, getDepartments, createDepartment, updateDepartment, deleteDepartment, getLocations, createLocation, updateLocation, deleteLocation, getMobileUsers } = require("../controllers/adminController");
 const { authenticate } = require("../middleware/auth");
 
 // All routes require authentication
@@ -44,5 +44,8 @@ router.get("/locations",        getLocations);
 router.post("/locations",       createLocation);
 router.patch("/locations/:id",  updateLocation);
 router.delete("/locations/:id", deleteLocation);
+
+// Mobile Users (SuperUser only)
+router.get("/mobile-users", getMobileUsers);
 
 module.exports = router;

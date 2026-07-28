@@ -8,6 +8,7 @@
 "use strict";
 
 const adminService = require("../services/adminService");
+const { isOnline }  = require("../utils/presenceService");
 
 function isUserAdminLike(user) {
   const role = (user?.role || "").trim();
@@ -238,4 +239,13 @@ async function deleteLocation(req, res, next) {
   } catch (err) { next(err); }
 }
 
-module.exports = { getUserLogReport, createUser, bulkCreateUsers, toggleUserStatus, getDeptTrackingReport, updateUser, resetPassword, getUserRoles, addUserRole, updateUserRole, toggleUserRole, deleteUserRole, getDepartments, createDepartment, updateDepartment, deleteDepartment, getLocations, createLocation, updateLocation, deleteLocation };
+// ── Mobile Users ───────────────────────────────────────────────────────────
+async function getMobileUsers(req, res, next) {
+  try {
+    if (req.user.role !== "SuperUser") return res.status(403).json({ error: "Access denied." });
+    const users = await adminService.getMobileUsers(isOnline);
+    res.json(users);
+  } catch (err) { next(err); }
+}
+
+module.exports = { getUserLogReport, createUser, bulkCreateUsers, toggleUserStatus, getDeptTrackingReport, updateUser, resetPassword, getUserRoles, addUserRole, updateUserRole, toggleUserRole, deleteUserRole, getDepartments, createDepartment, updateDepartment, deleteDepartment, getLocations, createLocation, updateLocation, deleteLocation, getMobileUsers };

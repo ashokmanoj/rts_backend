@@ -207,6 +207,26 @@ class AdminService {
     return prisma.location.delete({ where: { id: Number(id) } });
   }
 
+  // ── Mobile Users ──────────────────────────────────────────────────────────
+  async getMobileUsers(onlineChecker) {
+    const tokens = await prisma.fcmToken.findMany({
+      distinct: ["empId"],
+      select:   { empId: true, createdAt: true },
+    });
+    const empIds = tokens.map(t => t.empId);
+    const users  = await prisma.user.findMany({
+      where:   { empId: { in: empIds } },
+      select:  { empId: true, name: true, dept: true, location: true, role: true, designation: true, isActive: true, lastSeen: true, lastLogin: true },
+      orderBy: { name: "asc" },
+    });
+    const tokenMap = Object.fromEntries(tokens.map(t => [t.empId, t.createdAt]));
+    return users.map(u => ({
+      ...u,
+      isOnline:    onlineChecker(u.empId),
+      appInstalledAt: tokenMap[u.empId] || null,
+    }));
+  }
+
   async toggleUserStatus(empId, isActive) {
     return prisma.user.update({ where: { empId }, data: { isActive } });
   }
