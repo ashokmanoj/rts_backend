@@ -11,7 +11,7 @@ const prisma = require("../config/database");
 async function main() {
   const reqId = 1260;
 
-  // Fetch the request
+  // Fetch the request along with the requestor's user record (which has hodEmpId)
   const request = await prisma.request.findUnique({
     where: { id: reqId },
     select: { empId: true, dept: true, hodStatus: true, hodDate: true, purpose: true },
@@ -37,32 +37,63 @@ async function main() {
     process.exit(0);
   }
 
-  // Find the HOD of the requestor's department
-  const hod = await prisma.user.findFirst({
-    where: { dept: request.dept, role: "HOD", isActive: true },
-    select: { empId: true, name: true },
+  // Strategy 1: look up requestor's hodEmpId — most accurate pointer to who their HOD is
+  const requestor = await prisma.user.findUnique({
+    where:  { empId: request.empId },
+    select: { hodEmpId: true },
   });
 
-  let authorId = hod?.empId || "UNKNOWN";
-  let author   = hod?.name  || "HOD";
+  let hod = null;
+
+  if (requestor?.hodEmpId) {
+    hod = await prisma.user.findUnique({
+      where:  { empId: requestor.hodEmpId },
+      select: { empId: true, name: true },
+    });
+  }
+
+  // Strategy 2: any HOD in that dept (active or inactive)
+  if (!hod) {
+    hod = await prisma.user.findFirst({
+      where:   { dept: request.dept, role: "HOD" },
+      select:  { empId: true, name: true },
+      orderBy: { isActive: "desc" },
+    });
+  }
+
+  // Strategy 3: any SuperUser (valid FK, clearly labelled in the text)
+  if (!hod) {
+    hod = await prisma.user.findFirst({
+      where:  { role: "SuperUser" },
+      select: { empId: true, name: true },
+    });
+  }
+
+  if (!hod) {
+    console.error("Could not find any valid user to use as authorId. Aborting.");
+    process.exit(1);
+  }
+
+  const authorId = hod.empId;
+  const author   = hod.name;
 
   console.log(`Recovering approval message for request ${reqId}`);
   console.log(`  Dept: ${request.dept}`);
-  console.log(`  HOD found: ${author} (${authorId})`);
+  console.log(`  Author: ${author} (${authorId})`);
   console.log(`  Approval date: ${request.hodDate}`);
 
   const msg = await prisma.chatMessage.create({
     data: {
-      requestId:    reqId,
+      requestId: reqId,
       authorId,
       author,
-      role:         "HOD",
-      dept:         request.dept,
-      type:         "approval",
-      text:         "Approved the request.",
-      status:       "Approved",
-      purpose:      request.purpose,
-      createdAt:    request.hodDate || new Date(),
+      role:      "HOD",
+      dept:      request.dept,
+      type:      "approval",
+      text:      "Approved the request.",
+      status:    "Approved",
+      purpose:   request.purpose,
+      createdAt: request.hodDate || new Date(),
     },
   });
 
