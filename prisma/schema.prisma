@@ -260,6 +260,24 @@ model ChatMessage {
   @@map("chat_messages")
 }
 
+model Department {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("departments")
+}
+
+model Location {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("locations")
+}
+
 model FoodSubscription {
   id            Int       @id @default(autoincrement())
   empId         String    @unique @map("emp_id")

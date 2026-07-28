@@ -1071,25 +1071,21 @@ class RequestService {
   }
 
   async getDepartments() {
-    const users = await prisma.user.findMany({
+    const depts = await prisma.department.findMany({
       where:   { isActive: true },
-      select:  { dept: true },
-      distinct: ["dept"],
-      orderBy: { dept: "asc" },
+      orderBy: { name: "asc" },
+      select:  { name: true },
     });
-    const fromDb = users.map(u => u.dept).filter(Boolean);
-    return [...new Set([...fromDb, "Operations-Sundargarh Odisha"])].sort();
+    return depts.map(d => d.name);
   }
 
   async getLocations() {
-    const users = await prisma.user.findMany({
+    const locs = await prisma.location.findMany({
       where:   { isActive: true },
-      select:  { location: true },
-      distinct: ["location"],
-      orderBy: { location: "asc" },
+      orderBy: { name: "asc" },
+      select:  { name: true },
     });
-    const fromDb = users.map(u => u.location).filter(Boolean);
-    return [...new Set([...fromDb, "Sundargarh Odisha"])].sort();
+    return locs.map(l => l.name);
   }
 
   async markSeen(requestId, empId) {

@@ -1,5 +1,5 @@
 const router = require("express").Router({ caseSensitive: true });
-const { getUserLogReport, createUser, bulkCreateUsers, toggleUserStatus, getDeptTrackingReport, updateUser, resetPassword, getUserRoles, addUserRole, updateUserRole, toggleUserRole, deleteUserRole } = require("../controllers/adminController");
+const { getUserLogReport, createUser, bulkCreateUsers, toggleUserStatus, getDeptTrackingReport, updateUser, resetPassword, getUserRoles, addUserRole, updateUserRole, toggleUserRole, deleteUserRole, getDepartments, createDepartment, updateDepartment, deleteDepartment, getLocations, createLocation, updateLocation, deleteLocation } = require("../controllers/adminController");
 const { authenticate } = require("../middleware/auth");
 
 // All routes require authentication
@@ -32,5 +32,17 @@ router.post("/user-roles",              addUserRole);
 router.patch("/user-roles/:id",         updateUserRole);
 router.patch("/user-roles/:id/toggle",  toggleUserRole);
 router.delete("/user-roles/:id",        deleteUserRole);
+
+// Department CRUD (SuperUser / Admin / Management / HR DeptHOD)
+router.get("/departments",        getDepartments);
+router.post("/departments",       createDepartment);
+router.patch("/departments/:id",  updateDepartment);
+router.delete("/departments/:id", deleteDepartment);
+
+// Location CRUD (SuperUser / Admin / Management / HR DeptHOD)
+router.get("/locations",        getLocations);
+router.post("/locations",       createLocation);
+router.patch("/locations/:id",  updateLocation);
+router.delete("/locations/:id", deleteLocation);
 
 module.exports = router;

@@ -158,4 +158,84 @@ async function deleteUserRole(req, res, next) {
   }
 }
 
-module.exports = { getUserLogReport, createUser, bulkCreateUsers, toggleUserStatus, getDeptTrackingReport, updateUser, resetPassword, getUserRoles, addUserRole, updateUserRole, toggleUserRole, deleteUserRole };
+// ── Department CRUD ────────────────────────────────────────────────────────
+async function getDepartments(req, res, next) {
+  try {
+    if (!isUserAdminLike(req.user)) return res.status(403).json({ error: "Access denied." });
+    const depts = await adminService.getDepartmentList();
+    res.json(depts);
+  } catch (err) { next(err); }
+}
+
+async function createDepartment(req, res, next) {
+  try {
+    if (!isUserAdminLike(req.user)) return res.status(403).json({ error: "Access denied." });
+    const dept = await adminService.createDepartment(req.body.name);
+    res.status(201).json(dept);
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.message });
+    if (err.code === "P2002") return res.status(409).json({ error: "Department already exists." });
+    next(err);
+  }
+}
+
+async function updateDepartment(req, res, next) {
+  try {
+    if (!isUserAdminLike(req.user)) return res.status(403).json({ error: "Access denied." });
+    const dept = await adminService.updateDepartment(req.params.id, req.body);
+    res.json(dept);
+  } catch (err) {
+    if (err.code === "P2002") return res.status(409).json({ error: "Department name already exists." });
+    next(err);
+  }
+}
+
+async function deleteDepartment(req, res, next) {
+  try {
+    if (!isUserAdminLike(req.user)) return res.status(403).json({ error: "Access denied." });
+    await adminService.deleteDepartment(req.params.id);
+    res.json({ success: true });
+  } catch (err) { next(err); }
+}
+
+// ── Location CRUD ──────────────────────────────────────────────────────────
+async function getLocations(req, res, next) {
+  try {
+    if (!isUserAdminLike(req.user)) return res.status(403).json({ error: "Access denied." });
+    const locs = await adminService.getLocationList();
+    res.json(locs);
+  } catch (err) { next(err); }
+}
+
+async function createLocation(req, res, next) {
+  try {
+    if (!isUserAdminLike(req.user)) return res.status(403).json({ error: "Access denied." });
+    const loc = await adminService.createLocation(req.body.name);
+    res.status(201).json(loc);
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.message });
+    if (err.code === "P2002") return res.status(409).json({ error: "Location already exists." });
+    next(err);
+  }
+}
+
+async function updateLocation(req, res, next) {
+  try {
+    if (!isUserAdminLike(req.user)) return res.status(403).json({ error: "Access denied." });
+    const loc = await adminService.updateLocation(req.params.id, req.body);
+    res.json(loc);
+  } catch (err) {
+    if (err.code === "P2002") return res.status(409).json({ error: "Location name already exists." });
+    next(err);
+  }
+}
+
+async function deleteLocation(req, res, next) {
+  try {
+    if (!isUserAdminLike(req.user)) return res.status(403).json({ error: "Access denied." });
+    await adminService.deleteLocation(req.params.id);
+    res.json({ success: true });
+  } catch (err) { next(err); }
+}
+
+module.exports = { getUserLogReport, createUser, bulkCreateUsers, toggleUserStatus, getDeptTrackingReport, updateUser, resetPassword, getUserRoles, addUserRole, updateUserRole, toggleUserRole, deleteUserRole, getDepartments, createDepartment, updateDepartment, deleteDepartment, getLocations, createLocation, updateLocation, deleteLocation };

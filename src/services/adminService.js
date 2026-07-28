@@ -163,6 +163,50 @@ class AdminService {
     });
   }
 
+  // ── Department CRUD ────────────────────────────────────────────────────────
+  async getDepartmentList() {
+    return prisma.department.findMany({ orderBy: { name: "asc" } });
+  }
+
+  async createDepartment(name) {
+    if (!name?.trim()) throw Object.assign(new Error("Department name is required."), { status: 400 });
+    return prisma.department.create({ data: { name: name.trim() } });
+  }
+
+  async updateDepartment(id, data) {
+    const { name, isActive } = data;
+    const update = {};
+    if (name !== undefined) update.name = name.trim();
+    if (isActive !== undefined) update.isActive = isActive;
+    return prisma.department.update({ where: { id: Number(id) }, data: update });
+  }
+
+  async deleteDepartment(id) {
+    return prisma.department.delete({ where: { id: Number(id) } });
+  }
+
+  // ── Location CRUD ─────────────────────────────────────────────────────────
+  async getLocationList() {
+    return prisma.location.findMany({ orderBy: { name: "asc" } });
+  }
+
+  async createLocation(name) {
+    if (!name?.trim()) throw Object.assign(new Error("Location name is required."), { status: 400 });
+    return prisma.location.create({ data: { name: name.trim() } });
+  }
+
+  async updateLocation(id, data) {
+    const { name, isActive } = data;
+    const update = {};
+    if (name !== undefined) update.name = name.trim();
+    if (isActive !== undefined) update.isActive = isActive;
+    return prisma.location.update({ where: { id: Number(id) }, data: update });
+  }
+
+  async deleteLocation(id) {
+    return prisma.location.delete({ where: { id: Number(id) } });
+  }
+
   async toggleUserStatus(empId, isActive) {
     return prisma.user.update({ where: { empId }, data: { isActive } });
   }
