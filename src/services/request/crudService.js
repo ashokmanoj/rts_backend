@@ -114,10 +114,23 @@ async function editRequest(reqId, user, body, uploadedFiles = [], req) {
       updateData.fileNames = JSON.stringify(allNames);
     }
 
-    const [updated] = await prisma.$transaction([
-      prisma.request.update({ where: { id: reqId }, data: updateData, include: WITH_OWNER }),
-      prisma.chatMessage.deleteMany({ where: { requestId: reqId } }),
-    ]);
+    const updated = await prisma.request.update({ where: { id: reqId }, data: updateData, include: WITH_OWNER });
+
+    // Log the edit so the chat trail records who changed what
+    await prisma.chatMessage.create({
+      data: {
+        requestId: reqId,
+        authorId:  user.empId,
+        author:    user.name,
+        role:      user.role,
+        dept:      user.dept,
+        type:      "system",
+        text:      `Request edited by ${user.name} (SuperUser).`,
+        status:    "Edited",
+        purpose:   updated.purpose,
+      },
+    });
+
     return formatRequest(updated, user.empId);
   }
 
