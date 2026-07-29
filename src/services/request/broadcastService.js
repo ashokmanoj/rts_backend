@@ -89,7 +89,7 @@ async function broadcastSend(user, body, uploadedFiles = [], req) {
     const fNames = files.length > 0 ? JSON.stringify(files.map(f => f.originalname))         : null;
 
     // Save exactly ONE record — the sender's copy — so the broadcaster sees it in their list
-    await prisma.request.create({
+    const broadcast = await prisma.request.create({
       data: {
         empId:               user.empId,
         purpose:             title.trim(),
@@ -115,17 +115,15 @@ async function broadcastSend(user, body, uploadedFiles = [], req) {
       },
     });
 
-    // Notify all matched Requestors via push — no extra DB records created
+    // Notify all matched Requestors via push — deep-link directly to the broadcast ticket
     const pushPayload = {
       title:              title.trim(),
       body:               stripHtml(description) || `Broadcast from ${user.dept} Department`,
-      icon:               "/rtsLogo.png",
-      badge:              "/rtsLogo.png",
-      tag:                `broadcast-${Date.now()}`,
+      tag:                `broadcast-${broadcast.id}`,
       requireInteraction: false,
       type:               "broadcast",
-      url:                "/",
-      data:               { action: "broadcast", channel_id: "rts_notifications", senderDept: user.dept },
+      url:                `/?openRequest=${broadcast.id}`,
+      data:               { action: "broadcast", channel_id: "rts_notifications", senderDept: user.dept, requestId: broadcast.id },
     };
     Promise.allSettled(targets.map(t => sendPushToUser(t.empId, pushPayload))).catch(() => {});
 

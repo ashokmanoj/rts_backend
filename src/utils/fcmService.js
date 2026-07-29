@@ -12,6 +12,7 @@ async function sendFcmToUser(empId, payload) {
   if (!rows.length) return;
 
   const invalidTokens = [];
+  const channelId = payload.data?.channel_id || "rts_notifications";
 
   await Promise.allSettled(
     rows.map(async ({ token }) => {
@@ -23,29 +24,26 @@ async function sendFcmToUser(empId, payload) {
             body:  payload.body,
           },
           data: {
-            url:        payload.url                          || "/",
-            type:       payload.type                        || "general",
-            tag:        payload.tag                         || "",
-            badge:      payload.badge                       || "",
-            icon:       payload.icon                        || "",
-            action:     payload.data?.action                || "general",
-            channel_id: payload.data?.channel_id            || "rts_notifications",
-            request_id: String(payload.data?.requestId      || ""),
+            url:        payload.url                     || "/",
+            type:       payload.type                    || "general",
+            tag:        payload.tag                     || "",
+            action:     payload.data?.action            || "general",
+            channel_id: channelId,
+            request_id: String(payload.data?.requestId || ""),
             deepLink:   payload.data?.requestId
                           ? `${process.env.FRONTEND_URL || ""}/?openRequest=${payload.data.requestId}`
                           : (process.env.FRONTEND_URL || "/"),
           },
           android: {
+            priority: "high",
             notification: {
               sound:     "default",
-              channelId: payload.data?.channel_id || "rts_notifications",
-              icon:      payload.icon || "rtsLogo",
+              channelId,
               sticky:    true,
             },
-            priority: "high",
           },
           apns: {
-            payload: { aps: { sound: "default" } },
+            payload: { aps: { sound: "default", badge: 1 } },
           },
         });
       } catch (err) {
@@ -55,6 +53,9 @@ async function sendFcmToUser(empId, payload) {
           code === "messaging/registration-token-not-registered"
         ) {
           invalidTokens.push(token);
+        } else {
+          // Log unexpected FCM errors so they appear in server logs
+          console.error(`[FCM] Failed to send to ${empId} (${code || err.message})`);
         }
       }
     })
