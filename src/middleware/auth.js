@@ -1,8 +1,10 @@
-const jwt  = require("jsonwebtoken");
+const jwt   = require("jsonwebtoken");
+const prisma = require("../config/database");
 
 /**
  * Verifies a full Bearer JWT (rejects temp tokens used for role selection).
  * Attaches decoded user payload to req.user.
+ * Also checks isActive in the DB so disabled users are kicked on their next request.
  */
 function authenticate(req, res, next) {
   const header = req.headers.authorization;
@@ -11,16 +13,30 @@ function authenticate(req, res, next) {
   }
 
   const token = header.split(" ")[1];
+  let payload;
   try {
-    const payload = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ["HS256"] });
+    payload = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ["HS256"] });
     if (payload.type === "temp") {
       return res.status(401).json({ error: "Role selection required." });
     }
-    req.user = payload;   // { userId, empId, name, role, dept, location }
-    next();
   } catch {
     return res.status(401).json({ error: "Invalid or expired token." });
   }
+
+  // Fast isActive check — single indexed primary-key lookup
+  prisma.user.findUnique({ where: { empId: payload.empId }, select: { isActive: true } })
+    .then(user => {
+      if (!user || !user.isActive) {
+        return res.status(401).json({ error: "Your account has been disabled.", code: "ACCOUNT_DISABLED" });
+      }
+      req.user = payload;
+      next();
+    })
+    .catch(() => {
+      // On DB error, fail open so a transient outage doesn't lock everyone out
+      req.user = payload;
+      next();
+    });
 }
 
 /**

@@ -66,4 +66,48 @@ async function sendFcmToUser(empId, payload) {
   }
 }
 
-module.exports = { sendFcmToUser };
+/**
+ * Send a force-logout notification to all registered devices of a user.
+ * The Flutter app must handle type="force_logout" by clearing session and navigating to login.
+ */
+async function sendForceLogout(empId) {
+  const rows = await prisma.fcmToken.findMany({ where: { empId } });
+
+  console.log(`[FCM] sendForceLogout → ${empId}: ${rows.length} token(s) found`);
+  if (!rows.length) return;
+
+  await Promise.allSettled(
+    rows.map(async ({ token }) => {
+      try {
+        await admin.messaging().send({
+          token,
+          notification: {
+            title: "Account Disabled",
+            body:  "Your account has been disabled. Please contact HR.",
+          },
+          data: {
+            type:       "force_logout",
+            action:     "force_logout",
+            channel_id: "rts_notifications",
+          },
+          android: {
+            priority: "high",
+            notification: {
+              sound:     "default",
+              channelId: "rts_notifications",
+              sticky:    true,
+            },
+          },
+          apns: {
+            payload: { aps: { sound: "default" } },
+          },
+        });
+        console.log(`[FCM] force_logout sent to ${empId}`);
+      } catch (err) {
+        console.error(`[FCM] force_logout failed for ${empId}: ${err?.errorInfo?.code || err.message}`);
+      }
+    })
+  );
+}
+
+module.exports = { sendFcmToUser, sendForceLogout };

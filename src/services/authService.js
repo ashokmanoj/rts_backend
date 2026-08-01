@@ -71,7 +71,7 @@ class AuthService {
       algorithm: "HS256",
     });
 
-    return { token, user: payload };
+    return { token, user: { ...payload, isActive: user.isActive } };
   }
 
   async selectRole(userId, empId, role, dept) {
@@ -88,7 +88,7 @@ class AuthService {
       expiresIn: process.env.JWT_EXPIRES_IN || "7d",
       algorithm: "HS256",
     });
-    return { token, user: { ...payload, availableRoles } };
+    return { token, user: { ...payload, isActive: user.isActive, availableRoles } };
   }
 
   async switchRole(empId, role, dept) {
@@ -105,7 +105,7 @@ class AuthService {
       expiresIn: process.env.JWT_EXPIRES_IN || "7d",
       algorithm: "HS256",
     });
-    return { token, user: { ...payload, availableRoles } };
+    return { token, user: { ...payload, isActive: user.isActive, availableRoles } };
   }
 
   async logout(empId) {
@@ -190,7 +190,7 @@ class AuthService {
     return prisma.user.findUnique({
       where: { empId },
       select: {
-        id: true, empId: true, name: true, role: true, dept: true, location: true,
+        id: true, empId: true, name: true, role: true, dept: true, location: true, isActive: true,
         userRoles: { select: { role: true, dept: true } },
       },
     });

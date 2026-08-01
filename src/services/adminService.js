@@ -10,6 +10,7 @@
 const roles = require("../constants/roles");
 const prisma = require("../config/database");
 const bcrypt = require("bcryptjs");
+const { sendForceLogout } = require("../utils/fcmService");
 
 class AdminService {
   async getUserLogReport() {
@@ -228,7 +229,19 @@ class AdminService {
   }
 
   async toggleUserStatus(empId, isActive) {
-    return prisma.user.update({ where: { empId }, data: { isActive } });
+    const user = await prisma.user.update({ where: { empId }, data: { isActive } });
+
+    if (!isActive) {
+      // Send force-logout to all mobile devices before removing tokens
+      await sendForceLogout(empId).catch(() => {});
+      // Clean up all sessions so the disabled user can't authenticate on web or mobile
+      await Promise.all([
+        prisma.fcmToken.deleteMany({ where: { empId } }),
+        prisma.pushSubscription.deleteMany({ where: { empId } }),
+      ]);
+    }
+
+    return user;
   }
 
   async resetPassword(empId, newPassword) {

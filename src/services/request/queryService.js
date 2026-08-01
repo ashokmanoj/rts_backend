@@ -353,6 +353,7 @@ async function getFilterOptions(user) {
         { AND: [{ assignedDepts: { contains: userDept } }, { isDirectAssign: false }] },
         { ccDepts:  { contains: userDept } },
         { ccEmpIds: { contains: empId } },
+        { AND: [{ requestorRole: 'broadcast' }, { ccDepts: "ALL" }] },
       ] };
     } else if (role === "RM") {
       roleFilter = {
@@ -364,6 +365,7 @@ async function getFilterOptions(user) {
           { AND: [{ owner: { rmEmpId: empId } }, { assignedDepts: { contains: userDept } }, { isDirectAssign: false }] },
           { ccDepts:  { contains: userDept } },
           { ccEmpIds: { contains: empId } },
+          { AND: [{ requestorRole: 'broadcast' }, { ccDepts: "ALL" }] },
         ],
       };
     } else if (role === "HOD") {
@@ -376,6 +378,7 @@ async function getFilterOptions(user) {
           { AND: [{ owner: { hodEmpId: empId } }, { assignedDepts: { contains: userDept } }, { isDirectAssign: false }] },
           { ccDepts:  { contains: userDept } },
           { ccEmpIds: { contains: empId } },
+          { AND: [{ requestorRole: 'broadcast' }, { ccDepts: "ALL" }] },
         ],
       };
     } else if (role === "ViewCloseTicket") {
@@ -385,6 +388,7 @@ async function getFilterOptions(user) {
           { assignedDepts: { contains: userDept } },
           { ccDepts: { contains: userDept } },
           { ccEmpIds: { contains: empId } },
+          { AND: [{ requestorRole: 'broadcast' }, { ccDepts: "ALL" }] },
         ],
       };
     } else {
@@ -394,6 +398,7 @@ async function getFilterOptions(user) {
           { assignedPersonEmpId: { contains: empId } },
           { ccDepts:  { contains: userDept } },
           { ccEmpIds: { contains: empId } },
+          { AND: [{ requestorRole: 'broadcast' }, { ccDepts: "ALL" }] },
         ],
       };
     }
