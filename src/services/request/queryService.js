@@ -101,6 +101,19 @@ async function getAll(user, query) {
           { assignedDepts: { contains: userDept } },
           { ccDepts: { contains: userDept } },
           { ccEmpIds: { contains: empId } },
+          { AND: [{ requestorRole: 'broadcast' }, { ccDepts: "ALL" }] },
+        ],
+      };
+    } else if (role === "ProjectView") {
+      // Full dept visibility: own dept requests + all incoming + CC + broadcasts
+      roleFilter = {
+        OR: [
+          { dept: userDept },
+          { assignedDept: userDept },
+          { assignedDepts: { contains: userDept } },
+          { ccDepts: { contains: userDept } },
+          { ccEmpIds: { contains: empId } },
+          { AND: [{ requestorRole: 'broadcast' }, { ccDepts: "ALL" }] },
         ],
       };
     } else {
@@ -111,6 +124,7 @@ async function getAll(user, query) {
           { assignedPersonEmpId: { contains: empId } },
           { ccDepts:  { contains: userDept } },
           { ccEmpIds: { contains: empId } },
+          { AND: [{ requestorRole: 'broadcast' }, { ccDepts: "ALL" }] },
         ],
       };
     }
@@ -385,6 +399,17 @@ async function getFilterOptions(user) {
       roleFilter = {
         OR: [
           { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }] },
+          { assignedDepts: { contains: userDept } },
+          { ccDepts: { contains: userDept } },
+          { ccEmpIds: { contains: empId } },
+          { AND: [{ requestorRole: 'broadcast' }, { ccDepts: "ALL" }] },
+        ],
+      };
+    } else if (role === "ProjectView") {
+      roleFilter = {
+        OR: [
+          { dept: userDept },
+          { assignedDept: userDept },
           { assignedDepts: { contains: userDept } },
           { ccDepts: { contains: userDept } },
           { ccEmpIds: { contains: empId } },

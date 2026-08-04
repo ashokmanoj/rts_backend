@@ -23,6 +23,7 @@ enum Role {
   Intern
   SuperUser
   ViewCloseTicket
+  ProjectView
 }
 
 enum MessageType {
