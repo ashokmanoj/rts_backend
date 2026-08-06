@@ -332,8 +332,8 @@ class FoodService {
       curr.setDate(curr.getDate() + 1);
     }
 
-    // Count working days for THIS month: regular + next-week overflow (both billed here)
-    // "other-week" days are excluded (billed to previous month)
+    // Count working days for THIS month: regular + working-saturday + next-week overflow
+    // (all billed here). "other-week" days are excluded (billed to previous month).
     const workingDaysCount = days.filter(
       d => d.type === "working" || d.type === "working-saturday" || d.type === "next-week"
     ).length;
@@ -394,7 +394,8 @@ class FoodService {
           holidays,
           u.foodCancellations.map(c => c.weekStartDate),
           u.foodSubscription?.suspendedFrom,
-          u.foodSubscription?.startDate   // respect subscription start date
+          u.foodSubscription?.startDate,
+          startDate   // monthStart: aligns billing weeks with the calendar view
         );
 
         if (workingDays === 0) return null;

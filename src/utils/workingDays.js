@@ -24,7 +24,14 @@ function isNonWorkingDay(date, holidays = []) {
   if (day === 0) return true; // Sunday
   if (isSecondOrFourthSaturday(date)) return true;
   const dateStr = toDateString(date);
-  return holidays.some(h => toDateString(new Date(h.date)) === dateStr);
+  // Holidays are stored as IST midnight (18:30 UTC previous day).
+  // Normalise to IST calendar date before comparing so it works on any server timezone.
+  return holidays.some(h => {
+    const istMs = new Date(h.date).getTime() + 5.5 * 60 * 60 * 1000;
+    const ist = new Date(istMs);
+    const hStr = `${ist.getUTCFullYear()}-${String(ist.getUTCMonth() + 1).padStart(2, '0')}-${String(ist.getUTCDate()).padStart(2, '0')}`;
+    return hStr === dateStr;
+  });
 }
 
 // Returns Monday of the week containing the given date
@@ -65,15 +72,36 @@ function getNextNextWeekStart(date) {
   return getNextWeekStart(getNextWeekStart(date));
 }
 
-function calculateWorkingDays(startDate, endDate, holidays = [], cancelledWeekStarts = [], suspendedFrom = null, subStartDate = null) {
-  const days = getDaysInRange(startDate, endDate);
+/**
+ * monthStart: when provided (monthly-report mode) the function mirrors the
+ * calendar's billing boundaries —
+ *   • skips days in "prev month weeks" (weeks whose Monday is before monthStart)
+ *   • extends endDate to the end of the last week starting in the month so
+ *     next-month overflow days (e.g. Aug 1 when billing July) are counted here.
+ */
+function calculateWorkingDays(startDate, endDate, holidays = [], cancelledWeekStarts = [], suspendedFrom = null, subStartDate = null, monthStart = null) {
+  // Extend range to cover the full last week of the month (next-month overflow).
+  // Mirrors getCalendar's displayEnd logic.
+  let effectiveEnd = endDate;
+  if (monthStart) {
+    const lastDow  = new Date(endDate).getDay();
+    const extra    = lastDow === 0 ? 0 : 7 - lastDow;
+    effectiveEnd   = new Date(endDate);
+    effectiveEnd.setDate(effectiveEnd.getDate() + extra);
+  }
+
+  const days = getDaysInRange(startDate, effectiveEnd);
   const suspDateStr     = suspendedFrom  ? toDateString(new Date(suspendedFrom))  : null;
   const subStartDateStr = subStartDate   ? toDateString(new Date(subStartDate))   : null;
+  const monthStartStr   = monthStart     ? toDateString(new Date(monthStart))     : null;
   let count = 0;
 
   for (const day of days) {
     if (isNonWorkingDay(day, holidays)) continue;
-    if (subStartDateStr && toDateString(getWeekStart(day)) < subStartDateStr) continue; // before subscription start week
+    // Skip days whose billing week (Monday) falls before the month start
+    // — they belong to the previous month (calendar shows them as "other-week").
+    if (monthStartStr && toDateString(getWeekStart(day)) < monthStartStr) continue;
+    if (subStartDateStr && toDateString(getWeekStart(day)) < subStartDateStr) continue;
     if (suspDateStr && toDateString(day) >= suspDateStr) continue;
 
     const weekStartStr = toDateString(getWeekStart(day));
