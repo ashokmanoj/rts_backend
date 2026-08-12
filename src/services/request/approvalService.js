@@ -13,6 +13,21 @@ async function approval(reqId, user, body) {
     if (existing.isClosed) throw new Error("Cannot update a closed ticket.");
     if (user.role === "Admin") throw new Error("Admin has read-only access.");
 
+    // RM / HOD / DeptHOD can only act on requests where their dept is actually involved —
+    // prevents thread-linked users from approving/rejecting requests assigned to another dept.
+    if (["RM", "HOD", "DeptHOD"].includes(user.role)) {
+      const assignedDeptsChain = existing.assignedDepts
+        ? existing.assignedDepts.split(",").map(s => s.trim()).filter(Boolean)
+        : [];
+      const isDeptRelevant =
+        user.dept === existing.dept ||
+        user.dept === existing.assignedDept ||
+        assignedDeptsChain.includes(user.dept);
+      if (!isDeptRelevant) {
+        throw Object.assign(new Error("Unauthorized: your department is not assigned to this request."), { status: 403 });
+      }
+    }
+
     let updateData = {};
     if (decision === "Checking") {
       updateData.assignedStatus = "Checking";
