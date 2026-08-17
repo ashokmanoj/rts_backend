@@ -97,11 +97,14 @@ async function fcmRegister(req, res, next) {
     const token = req.body.token || req.body.fcmToken || req.body.fcm_token || req.body.deviceToken || req.body.device_token;
     if (!token) return res.status(400).json({ error: "token required. Send as: { \"token\": \"<fcm_token>\" }" });
 
-    await prisma.fcmToken.upsert({
-      where:  { token },
-      update: { empId: req.user.empId },
-      create: { empId: req.user.empId, token },
-    });
+    await prisma.$transaction([
+      prisma.fcmToken.deleteMany({ where: { empId: req.user.empId, NOT: { token } } }),
+      prisma.fcmToken.upsert({
+        where:  { token },
+        update: { empId: req.user.empId },
+        create: { empId: req.user.empId, token },
+      }),
+    ]);
 
     res.json({ success: true });
   } catch (err) {
