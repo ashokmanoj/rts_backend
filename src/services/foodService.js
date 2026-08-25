@@ -382,7 +382,7 @@ class FoodService {
         ...(deptFilter ? { dept: deptFilter } : {}),
         OR: [
           { isActive: true },
-          { isActive: false, deactivatedAt: { gte: startDate, lte: endDate } },
+          { isActive: false, deactivatedAt: { gte: startDate } },
         ],
       },
       include: { foodSubscription: true, foodCancellations: true },
