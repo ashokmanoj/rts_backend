@@ -18,6 +18,9 @@ router.get("/filters", ctrl.getFilterOptions);
 // GET unread request counts per available role/dept (for role-switcher badge)
 router.get("/role-counts", ctrl.getRoleCounts);
 
+// GET dashboard status counts (open / closed / ack-pending / broadcast)
+router.get("/counts", ctrl.getCounts);
+
 // GET employees by dept(s) — used when creating a request / forward
 router.get("/users-by-dept", ctrl.getUsersByDept);
 

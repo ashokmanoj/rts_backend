@@ -3,6 +3,12 @@
  * Catches anything passed to next(err).
  */
 function errorHandler(err, req, res, next) {  // eslint-disable-line no-unused-vars
+  // Client disconnected before the response was sent — not a server error, skip entirely.
+  const isAborted = req.aborted || req.destroyed ||
+    err.code === "ECONNRESET" || err.type === "request.aborted" ||
+    (typeof err.message === "string" && err.message.toLowerCase().includes("aborted"));
+  if (isAborted) return;
+
   console.error(`[ERROR] ${req.method} ${req.path} —`, err.message);
 
   const isDev = process.env.NODE_ENV === "development";

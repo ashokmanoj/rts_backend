@@ -61,7 +61,22 @@ async function closeStaleTickets(tickets, days) {
   }
 }
 
+let autoCloseJobRunning = false;
+
 async function runAutoCloseJob() {
+  if (autoCloseJobRunning) {
+    console.log("🤖 Auto-close cron: skipped — previous run still in progress.");
+    return;
+  }
+  autoCloseJobRunning = true;
+  try {
+    await _runAutoCloseJob();
+  } finally {
+    autoCloseJobRunning = false;
+  }
+}
+
+async function _runAutoCloseJob() {
   const cutoff3 = new Date(Date.now() - AUTO_CLOSE_DAYS         * 24 * 60 * 60 * 1000);
   const cutoff5 = new Date(Date.now() - RTS_HELPDESK_CLOSE_DAYS * 24 * 60 * 60 * 1000);
 

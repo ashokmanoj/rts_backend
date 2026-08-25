@@ -15,6 +15,7 @@ class RequestService {
   getFilterOptions(user)                             { return query.getFilterOptions(user); }
   getById(reqId, user)                               { return query.getById(reqId, user); }
   getThread(requestId, viewerEmpId)                  { return query.getThread(requestId, viewerEmpId); }
+  getCounts(user)                                    { return query.getCounts(user); }
 
   create(user, data, files, req)                     { return crud.create(user, data, files, req); }
   editRequest(reqId, user, body, files, req)         { return crud.editRequest(reqId, user, body, files, req); }

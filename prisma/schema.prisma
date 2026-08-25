@@ -47,9 +47,10 @@ model User {
   dept         String
   designation  String?
   location     String?
-  isActive     Boolean  @default(true) @map("is_active")
-  lastLogin    DateTime? @map("last_login")
-  lastSeen     DateTime? @map("last_seen")
+  isActive       Boolean   @default(true) @map("is_active")
+  deactivatedAt  DateTime? @map("deactivated_at")
+  lastLogin      DateTime? @map("last_login")
+  lastSeen       DateTime? @map("last_seen")
   createdAt    DateTime @default(now()) @map("created_at")
 
   rmEmpId      String?  @map("rm_emp_id")

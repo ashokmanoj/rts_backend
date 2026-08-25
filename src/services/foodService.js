@@ -378,7 +378,13 @@ class FoodService {
     }
 
     const users = await prisma.user.findMany({
-      where: deptFilter ? { dept: deptFilter } : {},
+      where: {
+        ...(deptFilter ? { dept: deptFilter } : {}),
+        OR: [
+          { isActive: true },
+          { isActive: false, deactivatedAt: { gte: startDate, lte: endDate } },
+        ],
+      },
       include: { foodSubscription: true, foodCancellations: true },
     });
 

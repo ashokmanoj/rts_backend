@@ -5,6 +5,36 @@ const { formatRequest } = require("../../utils/formatters");
 const { parsePagination, buildPageResponse } = require("../../utils/paginate");
 const { WITH_OWNER, isRestrictedRequestorDept } = require("./helpers");
 
+function buildRoleFilter(user) {
+  const { role, empId, dept: userDept } = user;
+  const isAccountsDept = userDept?.startsWith("Accounts-");
+  if (role === "SuperUser" || role === "Management" || role === "Admin") return {};
+  if (role === "Requestor") {
+    if (isRestrictedRequestorDept(userDept)) {
+      return { OR: [{ empId }, { assignedPersonEmpId: { contains: empId } }, { ccEmpIds: { contains: empId } }, { AND: [{ requestorRole: 'broadcast' }, { ccDepts: "ALL" }] }] };
+    }
+    return { OR: [{ empId }, { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }, { isDirectAssign: false }] }, { assignedPersonEmpId: { contains: empId } }, { AND: [{ assignedDepts: { contains: userDept } }, { isDirectAssign: false }] }, { ccEmpIds: { contains: empId } }, { AND: [{ requestorRole: 'broadcast' }, { ccDepts: "ALL" }] }, ...(isAccountsDept ? [{ ccDepts: { contains: userDept } }] : [])] };
+  }
+  if (role === "DeptHOD") return { OR: [{ AND: [{ empId }, { dept: userDept }] }, { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }, { isDirectAssign: false }] }, { AND: [{ dept: userDept }, { assignedDept: userDept }, { isDirectAssign: false }] }, { AND: [{ assignedDepts: { contains: userDept } }, { isDirectAssign: false }] }, { ccDepts: { contains: userDept } }, { ccEmpIds: { contains: empId } }] };
+  if (role === "RM") return { OR: [{ AND: [{ empId }, { dept: userDept }] }, { AND: [{ owner: { rmEmpId: empId } }, { dept: userDept }, { assignedDept: { not: "Management" } }] }, { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }, { isDirectAssign: false }] }, { AND: [{ assignedDepts: { contains: userDept } }, { dept: { not: userDept } }, { isDirectAssign: false }] }, { AND: [{ owner: { rmEmpId: empId } }, { assignedDepts: { contains: userDept } }, { isDirectAssign: false }] }, { ccDepts: { contains: userDept } }, { ccEmpIds: { contains: empId } }] };
+  if (role === "HOD") return { OR: [{ AND: [{ empId }, { dept: userDept }] }, { AND: [{ owner: { hodEmpId: empId } }, { dept: userDept }, { assignedDept: { not: "Management" } }] }, { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }, { isDirectAssign: false }] }, { AND: [{ assignedDepts: { contains: userDept } }, { dept: { not: userDept } }, { isDirectAssign: false }] }, { AND: [{ owner: { hodEmpId: empId } }, { assignedDepts: { contains: userDept } }, { isDirectAssign: false }] }, { ccDepts: { contains: userDept } }, { ccEmpIds: { contains: empId } }] };
+  if (role === "ViewCloseTicket") return { OR: [{ AND: [{ assignedDept: userDept }, { dept: { not: userDept } }] }, { assignedDepts: { contains: userDept } }, { ccDepts: { contains: userDept } }, { ccEmpIds: { contains: empId } }, { AND: [{ requestorRole: 'broadcast' }, { ccDepts: "ALL" }] }] };
+  if (role === "ProjectView") return { OR: [{ dept: userDept }, { assignedDept: userDept }, { assignedDepts: { contains: userDept } }, { ccDepts: { contains: userDept } }, { ccEmpIds: { contains: empId } }, { AND: [{ requestorRole: 'broadcast' }, { ccDepts: "ALL" }] }] };
+  return { OR: [{ empId }, { assignedPersonEmpId: { contains: empId } }, { ccDepts: { contains: userDept } }, { ccEmpIds: { contains: empId } }, { AND: [{ requestorRole: 'broadcast' }, { ccDepts: "ALL" }] }] };
+}
+
+async function getCounts(user) {
+  const roleFilter = buildRoleFilter(user);
+  const rf = Object.keys(roleFilter).length > 0 ? [roleFilter] : [];
+  const [open, closed, ackPending, broadcast] = await Promise.all([
+    prisma.request.count({ where: { AND: [...rf, { isClosed: false }, { assignedStatus: { not: "Pending Acknowledgement" } }] } }),
+    prisma.request.count({ where: { AND: [...rf, { isClosed: true }] } }),
+    prisma.request.count({ where: { AND: [...rf, { assignedStatus: "Pending Acknowledgement" }] } }),
+    prisma.request.count({ where: { AND: [...rf, { requestorRole: "broadcast" }] } }),
+  ]);
+  return { open, closed, ackPending, broadcast };
+}
+
 async function getAll(user, query) {
     const { role, empId, dept: userDept } = user;
     const { page, limit, skip, take } = parsePagination(query);
@@ -21,113 +51,12 @@ async function getAll(user, query) {
     const types           = parseMulti(type);
 
     let closureFilter = {};
-    if (status === "open") closureFilter = { resolvedDate: null };
-    if (status === "closed") closureFilter = { resolvedDate: { not: null } };
+    if (status === "open")        closureFilter = { isClosed: false, assignedStatus: { not: "Pending Acknowledgement" } };
+    if (status === "closed")      closureFilter = { isClosed: true };
+    if (status === "ack_pending") closureFilter = { assignedStatus: "Pending Acknowledgement" };
+    if (status === "broadcast")   closureFilter = { requestorRole: "broadcast" };
 
-    // Requestor depts where visibility is restricted to own + assigned only
-
-    // Accounts depts (Accounts-G, Accounts-A, etc.) get full CC dept visibility like RM/HOD
-    const isAccountsDept = userDept?.startsWith("Accounts-");
-
-    let roleFilter = {};
-    if (role === "SuperUser" || role === "Management" || role === "Admin") {
-      roleFilter = {};
-    } else if (role === "Requestor") {
-      if (isRestrictedRequestorDept(userDept)) {
-        // Restricted depts (Operations, Academics, Game Development, Software, Animation):
-        // own requests + specifically assigned only — no dept-wide visibility
-        // CC dept visibility is limited to RM/HOD; Requestors only see explicit personal CC
-        roleFilter = {
-          OR: [
-            { empId },
-            { assignedPersonEmpId: { contains: empId } },
-            { ccEmpIds: { contains: empId } },
-            { AND: [{ requestorRole: 'broadcast' }, { ccDepts: "ALL" }] },
-          ],
-        };
-      } else {
-        // Other depts: own + incoming to their dept (cross-dept + same-dept) + assigned + forwarding chain
-        // Accounts depts additionally see all CC'd requests for their dept
-        roleFilter = {
-          OR: [
-            { empId },
-            { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }, { isDirectAssign: false }] },
-            { assignedPersonEmpId: { contains: empId } },
-            { AND: [{ assignedDepts: { contains: userDept } }, { isDirectAssign: false }] },
-            { ccEmpIds: { contains: empId } },
-            { AND: [{ requestorRole: 'broadcast' }, { ccDepts: "ALL" }] },
-            ...(isAccountsDept ? [{ ccDepts: { contains: userDept } }] : []),
-          ],
-        };
-      }
-    } else if (role === "DeptHOD") {
-      roleFilter = { OR: [
-        { AND: [{ empId }, { dept: userDept }] },
-        { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }, { isDirectAssign: false }] },
-        { AND: [{ dept: userDept }, { assignedDept: userDept }, { isDirectAssign: false }] },
-        { AND: [{ assignedDepts: { contains: userDept } }, { isDirectAssign: false }] },
-        { ccDepts:  { contains: userDept } },
-        { ccEmpIds: { contains: empId } },
-      ] };
-    } else if (role === "RM") {
-      roleFilter = {
-        OR: [
-          { AND: [{ empId }, { dept: userDept }] },
-          { AND: [{ owner: { rmEmpId: empId } }, { dept: userDept }, { assignedDept: { not: "Management" } }] },
-          { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }, { isDirectAssign: false }] },
-          { AND: [{ assignedDepts: { contains: userDept } }, { dept: { not: userDept } }, { isDirectAssign: false }] },
-          { AND: [{ owner: { rmEmpId: empId } }, { assignedDepts: { contains: userDept } }, { isDirectAssign: false }] },
-          { ccDepts:  { contains: userDept } },
-          { ccEmpIds: { contains: empId } },
-        ],
-      };
-    } else if (role === "HOD") {
-      roleFilter = {
-        OR: [
-          { AND: [{ empId }, { dept: userDept }] },
-          { AND: [{ owner: { hodEmpId: empId } }, { dept: userDept }, { assignedDept: { not: "Management" } }] },
-          { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }, { isDirectAssign: false }] },
-          { AND: [{ assignedDepts: { contains: userDept } }, { dept: { not: userDept } }, { isDirectAssign: false }] },
-          { AND: [{ owner: { hodEmpId: empId } }, { assignedDepts: { contains: userDept } }, { isDirectAssign: false }] },
-          { ccDepts:  { contains: userDept } },
-          { ccEmpIds: { contains: empId } },
-        ],
-      };
-    } else if (role === "ViewCloseTicket") {
-      // Only requests assigned to this user's specific dept
-      roleFilter = {
-        OR: [
-          { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }] },
-          { assignedDepts: { contains: userDept } },
-          { ccDepts: { contains: userDept } },
-          { ccEmpIds: { contains: empId } },
-          { AND: [{ requestorRole: 'broadcast' }, { ccDepts: "ALL" }] },
-        ],
-      };
-    } else if (role === "ProjectView") {
-      // Full dept visibility: own dept requests + all incoming + CC + broadcasts
-      roleFilter = {
-        OR: [
-          { dept: userDept },
-          { assignedDept: userDept },
-          { assignedDepts: { contains: userDept } },
-          { ccDepts: { contains: userDept } },
-          { ccEmpIds: { contains: empId } },
-          { AND: [{ requestorRole: 'broadcast' }, { ccDepts: "ALL" }] },
-        ],
-      };
-    } else {
-      // Interns and any other non-privileged roles: own + assigned only
-      roleFilter = {
-        OR: [
-          { empId },
-          { assignedPersonEmpId: { contains: empId } },
-          { ccDepts:  { contains: userDept } },
-          { ccEmpIds: { contains: empId } },
-          { AND: [{ requestorRole: 'broadcast' }, { ccDepts: "ALL" }] },
-        ],
-      };
-    }
+    const roleFilter = buildRoleFilter(user);
 
     const extraFilters = [];
 
@@ -172,18 +101,19 @@ async function getAll(user, query) {
       const hasNotApproved = rmActive.includes("not_approved");
       const others         = rmActive.filter(s => s !== "--" && s !== "ack_pending" && s !== "not_approved");
       const clauses        = [];
+      const notAckPending = { assignedStatus: { not: "Pending Acknowledgement" } };
       if (role === "RM") {
-        if (hasOpen)                clauses.push({ rmStatus: "--" });
+        if (hasOpen)                clauses.push({ AND: [{ rmStatus: "--" }, notAckPending] });
         if (hasNotApproved)         clauses.push({ rmStatus: { not: "Approved" } });
         if (others.length === 1)    clauses.push({ rmStatus: others[0] });
         if (others.length  > 1)     clauses.push({ rmStatus: { in: others } });
       } else if (role === "HOD") {
-        if (hasOpen)                clauses.push({ hodStatus: "--" });
+        if (hasOpen)                clauses.push({ AND: [{ hodStatus: "--" }, notAckPending] });
         if (hasNotApproved)         clauses.push({ hodStatus: { not: "Approved" } });
         if (others.length === 1)    clauses.push({ hodStatus: others[0] });
         if (others.length  > 1)     clauses.push({ hodStatus: { in: others } });
       } else {
-        if (hasOpen)                clauses.push({ AND: [{ rmStatus: "--" }, { hodStatus: "--" }] });
+        if (hasOpen)                clauses.push({ AND: [{ rmStatus: "--" }, { hodStatus: "--" }, notAckPending] });
         if (hasNotApproved)         clauses.push({ AND: [{ rmStatus: { not: "Approved" } }, { hodStatus: { not: "Approved" } }] });
         if (others.length === 1)    clauses.push({ OR: [{ rmStatus: others[0] }, { hodStatus: others[0] }] });
         if (others.length  > 1)     clauses.push({ OR: [{ rmStatus: { in: others } }, { hodStatus: { in: others } }] });
@@ -501,4 +431,4 @@ async function getThread(requestId, viewerEmpId) {
     };
   }
 
-module.exports = { getAll, getFilterOptions, getById, getThread };
+module.exports = { getAll, getFilterOptions, getById, getThread, getCounts };

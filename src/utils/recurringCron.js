@@ -16,7 +16,22 @@ function computeNextRecurringDate(interval) {
   return d;
 }
 
+let recurringJobRunning = false;
+
 async function runRecurringJob() {
+  if (recurringJobRunning) {
+    console.log("🔁 Recurring cron: skipped — previous run still in progress.");
+    return;
+  }
+  recurringJobRunning = true;
+  try {
+    await _runRecurringJob();
+  } finally {
+    recurringJobRunning = false;
+  }
+}
+
+async function _runRecurringJob() {
   const now = new Date();
 
   const due = await prisma.request.findMany({

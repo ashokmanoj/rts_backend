@@ -229,7 +229,10 @@ class AdminService {
   }
 
   async toggleUserStatus(empId, isActive) {
-    const user = await prisma.user.update({ where: { empId }, data: { isActive } });
+    const user = await prisma.user.update({
+      where: { empId },
+      data: { isActive, deactivatedAt: isActive ? null : new Date() },
+    });
 
     if (!isActive) {
       // Send force-logout to all mobile devices before removing tokens
