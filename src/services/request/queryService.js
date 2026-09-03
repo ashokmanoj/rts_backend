@@ -431,4 +431,4 @@ async function getThread(requestId, viewerEmpId) {
     };
   }
 
-module.exports = { getAll, getFilterOptions, getById, getThread, getCounts };
+module.exports = { getAll, getFilterOptions, getById, getThread, getCounts, buildRoleFilter };

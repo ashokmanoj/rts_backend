@@ -1,6 +1,7 @@
 "use strict";
 
 const prisma = require("../../config/database");
+const { buildRoleFilter } = require("./queryService");
 
 async function getUsersByDept(depts) {
     const deptList = Array.isArray(depts) ? depts : [depts];
@@ -57,74 +58,34 @@ async function markUnread(requestId, empId) {
   }
 
 async function getRoleCounts(user) {
-    const { empId } = user;
+  const { empId } = user;
 
-    const availableRoles = await prisma.userRole.findMany({
-      where:  { empId },
-      select: { role: true, dept: true },
-    });
-    if (!availableRoles.length) return [];
+  const availableRoles = await prisma.userRole.findMany({
+    where:  { empId, isActive: true },
+    select: { role: true, dept: true },
+  });
+  if (!availableRoles.length) return [];
 
-    const RESTRICTED_PREFIXES = ["Operations-", "Academics-", "Stores-"];
-    const RESTRICTED_EXACT    = new Set(["Game Development", "Software", "Animation", "Management", "HR", "Purchase"]);
-    const isRestricted = (dept) =>
-      RESTRICTED_PREFIXES.some(p => dept?.startsWith(p)) || RESTRICTED_EXACT.has(dept);
+  const counts = await Promise.all(
+    availableRoles.map(async ({ role, dept: userDept }) => {
+      // Use the same role filter as getAll so counts match what the user actually sees
+      const roleFilter = buildRoleFilter({ role, empId, dept: userDept });
+      const rf = Object.keys(roleFilter).length > 0 ? [roleFilter] : [];
 
-    const counts = await Promise.all(
-      availableRoles.map(async ({ role, dept: userDept }) => {
-        let roleFilter = {};
-
-        if (role === "SuperUser" || role === "Management" || role === "Admin") {
-          roleFilter = {};
-        } else if (role === "Requestor") {
-          roleFilter = isRestricted(userDept)
-            ? { OR: [{ empId }, { assignedPersonEmpId: { contains: empId } }, { ccDepts: { contains: userDept } }, { ccEmpIds: { contains: empId } }, { AND: [{ requestorRole: "broadcast" }, { ccDepts: "ALL" }] }] }
-            : { OR: [{ empId }, { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }, { isDirectAssign: false }] }, { assignedPersonEmpId: { contains: empId } }, { AND: [{ assignedDepts: { contains: userDept } }, { isDirectAssign: false }] }, { ccDepts: { contains: userDept } }, { ccEmpIds: { contains: empId } }, { AND: [{ requestorRole: "broadcast" }, { ccDepts: "ALL" }] }] };
-        } else if (role === "DeptHOD") {
-          roleFilter = { OR: [
-            { AND: [{ empId }, { dept: userDept }] },
-            { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }, { isDirectAssign: false }] },
-            { AND: [{ dept: userDept }, { assignedDept: userDept }, { isDirectAssign: false }] },
-            { AND: [{ assignedDepts: { contains: userDept } }, { isDirectAssign: false }] },
-            { ccDepts: { contains: userDept } },
-            { ccEmpIds: { contains: empId } },
-          ] };
-        } else if (role === "RM") {
-          roleFilter = { OR: [
-            { AND: [{ empId }, { dept: userDept }] },
-            { AND: [{ owner: { rmEmpId: empId } }, { dept: userDept }] },
-            { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }, { isDirectAssign: false }] },
-            { AND: [{ assignedDepts: { contains: userDept } }, { dept: { not: userDept } }, { isDirectAssign: false }] },
-            { AND: [{ owner: { rmEmpId: empId } }, { assignedDepts: { contains: userDept } }, { isDirectAssign: false }] },
-            { ccDepts: { contains: userDept } },
-            { ccEmpIds: { contains: empId } },
-          ] };
-        } else if (role === "HOD") {
-          roleFilter = { OR: [
-            { AND: [{ empId }, { dept: userDept }] },
-            { AND: [{ owner: { hodEmpId: empId } }, { dept: userDept }] },
-            { AND: [{ assignedDept: userDept }, { dept: { not: userDept } }, { isDirectAssign: false }] },
-            { AND: [{ assignedDepts: { contains: userDept } }, { dept: { not: userDept } }, { isDirectAssign: false }] },
-            { AND: [{ owner: { hodEmpId: empId } }, { assignedDepts: { contains: userDept } }, { isDirectAssign: false }] },
-            { ccDepts: { contains: userDept } },
-            { ccEmpIds: { contains: empId } },
-          ] };
-        } else {
-          roleFilter = { OR: [{ empId }, { assignedPersonEmpId: { contains: empId } }, { ccDepts: { contains: userDept } }, { ccEmpIds: { contains: empId } }] };
-        }
-
-        const andFilters = [
-          { isClosed: false },
-          { NOT: { requestorRole: "broadcast" } },
-          { readReceipts: { none: { empId } } },
-        ];
-        if (Object.keys(roleFilter).length > 0) andFilters.unshift(roleFilter);
-
-        const count = await prisma.request.count({ where: { AND: andFilters } });
-        return { role, dept: userDept, count };
-      })
-    );
-    return counts;
-  }
+      const count = await prisma.request.count({
+        where: {
+          AND: [
+            ...rf,
+            { isClosed: false },
+            { NOT: { requestorRole: "broadcast" } },
+            { readReceipts: { none: { empId } } },
+          ],
+        },
+      });
+      return { role, dept: userDept, count };
+    })
+  );
+  return counts;
+}
 
 module.exports = { getDepartments, getLocations, getUsersByDept, markSeen, markUnread, getRoleCounts };

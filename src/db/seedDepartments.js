@@ -16,7 +16,7 @@ const DEPARTMENTS = [
   "Operations-Mizoram", "Operations-Nagaland", "Operations-Sundargarh Odisha",
   "Operations-Tripura", "Operations-Uttarakhand",
   "Purchase", "RTS Help Desk", "Software",
-  "Stores-Assam", "Stores-Karnataka", "Stores-Mizoram", "Stores-Tripura", "Stores-Uttarakhand",
+  "Stores-Assam", "Stores-Karnataka", "Stores-Mizoram", "Stores-Sundargarh", "Stores-Tripura", "Stores-Uttarakhand",
   "System Admin-Assam", "System Admin-Karnataka", "System Admin-Uttarakhand",
   "TA Committee", "Technical Support",
 ];
