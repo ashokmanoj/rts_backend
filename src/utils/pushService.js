@@ -84,12 +84,13 @@ async function sendNewRequestNotification(request) {
   if (owner.rmEmpId)  recipients.add(owner.rmEmpId);
   if (owner.hodEmpId) recipients.add(owner.hodEmpId);
 
-  // DeptHOD + HOD + RM of the assigned department
-  const deptTeam = await prisma.user.findMany({
-    where:  { role: { in: ["DeptHOD", "HOD", "RM"] }, dept: request.assignedDept },
+  // DeptHOD + HOD + RM of the assigned department — check UserRole table so
+  // multi-role users (whose primary User.role may be Requestor) are not missed
+  const deptRoles = await prisma.userRole.findMany({
+    where:  { role: { in: ["DeptHOD", "HOD", "RM"] }, dept: request.assignedDept, isActive: true },
     select: { empId: true },
   });
-  deptTeam.forEach(u => recipients.add(u.empId));
+  deptRoles.forEach(u => recipients.add(u.empId));
 
   if (request.assignedPersonEmpId) {
     request.assignedPersonEmpId.split(",").forEach(id => {

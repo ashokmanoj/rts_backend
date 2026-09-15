@@ -14,17 +14,6 @@ const REMINDER_PAYLOAD = {
   data: { action: "food_reminder", channel_id: "food_reminder_channel" },
 };
 
-// Saturday 4 PM IST — status check for next week
-const SAT_STATUS_PAYLOAD = {
-  title:              "📋 Next Week Food Status",
-  body:               "Check your food status for next week — confirm or update your preference before saturday 6:30 PM.",
-  icon:               "/icon-192.png",
-  badge:              "/icon-192.png",
-  tag:                "food-sat-status",
-  requireInteraction: true,
-  url:  "/?tab=food",
-  data: { action: "food_reminder", channel_id: "food_reminder_channel" },
-};
 
 async function fireReminder(day, payload = REMINDER_PAYLOAD) {
   console.log(`[FoodReminder] Sending ${day} reminder...`);
@@ -38,18 +27,12 @@ async function fireReminder(day, payload = REMINDER_PAYLOAD) {
 
 /**
  * Weekly food reminder schedule (all times IST → UTC):
- *   Monday    5:00 PM IST  → "30 11 * * 1"
- *   Wednesday 5:00 PM IST  → "30 11 * * 3"
- *   Saturday  4:00 PM IST  → "30 10 * * 6"  ← next-week status check
- *   Saturday  5:00 PM IST  → "30 11 * * 6"  ← standard reminder
+ *   Friday 5:00 PM IST → "30 11 * * 5"
  */
 function startFoodReminderCron() {
-  cron.schedule("30 11 * * 1", () => fireReminder("Monday"),              { timezone: "UTC" });
-  cron.schedule("30 11 * * 3", () => fireReminder("Wednesday"),           { timezone: "UTC" });
-  cron.schedule("30 10 * * 6", () => fireReminder("Saturday-4PM", SAT_STATUS_PAYLOAD), { timezone: "UTC" });
-  cron.schedule("30 11 * * 6", () => fireReminder("Saturday-5PM"),        { timezone: "UTC" });
+  cron.schedule("30 11 * * 5", () => fireReminder("Friday"), { timezone: "UTC" });
 
-  console.log("✅ Food reminders scheduled — Mon / Wed at 5 PM IST | Sat at 4 PM & 5 PM IST");
+  console.log("✅ Food reminder scheduled — Friday at 5 PM IST");
 }
 
-module.exports = { startFoodReminderCron, REMINDER_PAYLOAD, SAT_STATUS_PAYLOAD };
+module.exports = { startFoodReminderCron, REMINDER_PAYLOAD };
