@@ -67,7 +67,7 @@ async function sendNewRequestNotification(request) {
 
   const purpose = (request.purpose || "New request").substring(0, 70);
   const payload = {
-    title: "📋 New Request",
+    title: `📋 New Request #${request.id}`,
     body:  `${owner.name} (${owner.dept}) — ${purpose}`,
     icon:  "/rtsLogo.png",
     badge: "/rtsLogo.png",
@@ -76,7 +76,7 @@ async function sendNewRequestNotification(request) {
     requireInteraction: false,
     type:  "new_request",
     url:   `/?openRequest=${request.id}`,
-    data:  { action: "new_request", requestId: request.id, channel_id: "new_request_channel" },
+    data:  { action: "new_request", requestId: request.id, ticketNo: request.id, channel_id: "new_request_channel" },
   };
 
   const recipients = new Set();
