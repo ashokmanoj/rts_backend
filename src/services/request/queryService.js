@@ -35,6 +35,23 @@ async function getCounts(user) {
   return { open, closed, ackPending, broadcast };
 }
 
+async function addUnreadChatCounts(rows, empId) {
+  if (!rows.length) return rows.map(r => ({ ...formatRequest(r, empId), unreadChatCount: 0 }));
+  const chatReads = await prisma.chatRead.findMany({
+    where: { empId, requestId: { in: rows.map(r => r.id) } },
+    select: { requestId: true, lastReadAt: true },
+  });
+  const readMap = new Map(chatReads.map(cr => [cr.requestId, cr.lastReadAt]));
+  return rows.map(r => {
+    const lastRead = readMap.get(r.id);
+    const unreadChatCount = (r.chatMessages || []).filter(m =>
+      m.authorId !== empId &&
+      (!lastRead || new Date(m.createdAt) > new Date(lastRead))
+    ).length;
+    return { ...formatRequest(r, empId), unreadChatCount };
+  });
+}
+
 async function getAll(user, query) {
     const { role, empId, dept: userDept } = user;
     const { page, limit, skip, take } = parsePagination(query);
@@ -266,7 +283,7 @@ async function getAll(user, query) {
         rows = await prisma.request.findMany({ where: readWhere, include: WITH_OWNER, orderBy: dateOrder, skip: skip - unreadTotal, take });
       }
 
-      return buildPageResponse(rows.map(r => formatRequest(r, empId)), total, page, limit);
+      return buildPageResponse(await addUnreadChatCounts(rows, empId), total, page, limit);
     }
 
     const order = sortOrder === "asc" ? "asc" : "desc";
@@ -282,7 +299,7 @@ async function getAll(user, query) {
       prisma.request.count({ where }),
     ]);
 
-    return buildPageResponse(requests.map(r => formatRequest(r, empId)), total, page, limit);
+    return buildPageResponse(await addUnreadChatCounts(requests, empId), total, page, limit);
   }
 
 async function getFilterOptions(user) {
