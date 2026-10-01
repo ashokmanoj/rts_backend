@@ -2,7 +2,7 @@
 
 const prisma = require("../../config/database");
 const { formatRequest } = require("../../utils/formatters");
-const { WITH_OWNER, buildFileUrl, stripHtml } = require("./helpers");
+const { WITH_OWNER, storeFiles, stripHtml, computeNextRecurringDate } = require("./helpers");
 
 async function approval(reqId, user, body) {
     const { decision, comment, newDept } = body;
@@ -99,7 +99,7 @@ async function approval(reqId, user, body) {
         updateData.resolvedBy    = `${user.name} (${user.role})`;
         updateData.assignedStatus = `Rejected (Closed)`;
       }
-      if (user.role === "DeptHOD" && decision === "Approved" && body.assignedPersonEmpId) {
+      if (decision === "Approved" && body.assignedPersonEmpId && (user.role === "DeptHOD" || isAssignedDeptUser)) {
         updateData.assignedPersonEmpId = body.assignedPersonEmpId;
         updateData.assignedPersonName  = body.assignedPersonName || null;
       }
@@ -124,7 +124,10 @@ async function approval(reqId, user, body) {
 
     const updated = await prisma.request.update({ where: { id: reqId }, data: updateData, include: WITH_OWNER });
 
-    const isDualPopupForward = decision === "Forwarded" && body.dualDept && (user.role === "DeptHOD" || user.role === "HOD");
+    const isDualPopupForward = decision === "Forwarded" && body.dualDept && (user.role === "DeptHOD" || user.role === "HOD" || user.role === "RM");
+
+    const isInternalAssign = decision === "Approved" && body.assignedPersonName &&
+      (user.role === "DeptHOD" || user.role === "HOD" || user.role === "RM");
 
     if (isDualPopupForward) {
       // Two messages: first Approved, then Forwarded — both visible in chat
@@ -155,6 +158,38 @@ async function approval(reqId, user, body) {
           status:    "Forwarded",
           purpose:   updated.purpose,
           changedDept:  newDept,
+          originalDept: existing.assignedDept,
+        },
+      });
+    } else if (isInternalAssign) {
+      // Two messages: first Approved, then Assigned — both visible in chat
+      await prisma.chatMessage.create({
+        data: {
+          requestId: reqId,
+          authorId:  user.empId,
+          author:    user.name,
+          role:      user.role,
+          dept:      user.dept,
+          type:      "approval",
+          text:      comment || "Approved the request.",
+          status:    "Approved",
+          purpose:   updated.purpose,
+          changedDept:  null,
+          originalDept: existing.assignedDept,
+        },
+      });
+      await prisma.chatMessage.create({
+        data: {
+          requestId: reqId,
+          authorId:  user.empId,
+          author:    user.name,
+          role:      user.role,
+          dept:      user.dept,
+          type:      "approval",
+          text:      `Assigned internally to ${body.assignedPersonName}.`,
+          status:    "Assigned",
+          purpose:   updated.purpose,
+          changedDept:  body.assignedPersonName,  // reuse changedDept to carry the names
           originalDept: existing.assignedDept,
         },
       });
@@ -195,12 +230,13 @@ async function close(reqId, user, body, uploadedFiles, req) {
 
     const now   = new Date();
     const files = Array.isArray(uploadedFiles) ? uploadedFiles : (uploadedFiles ? [uploadedFiles] : []);
-    const first = files[0] ?? null;
-    const fUrl   = first ? buildFileUrl(req, first.filename)  : null;
-    const fName  = first ? first.originalname                      : null;
-    const isImg  = first ? first.mimetype.startsWith("image/")     : false;
-    const fUrls  = files.length > 0 ? JSON.stringify(files.map(f => buildFileUrl(req, f.filename))) : null;
-    const fNames = files.length > 0 ? JSON.stringify(files.map(f => f.originalname))                     : null;
+    const stored = await storeFiles(req, files);
+    const first  = files[0] ?? null;
+    const fUrl   = stored[0]?.url  ?? null;
+    const fName  = stored[0]?.name ?? null;
+    const isImg  = first ? first.mimetype.startsWith("image/") : false;
+    const fUrls  = stored.length > 0 ? JSON.stringify(stored.map(s => s.url))  : null;
+    const fNames = stored.length > 0 ? JSON.stringify(stored.map(s => s.name)) : null;
 
     await prisma.closeTicket.create({ data: { requestId: reqId, description: note || "No reason", fileUrl: fUrl, fileName: fName, fileUrls: fUrls, fileNames: fNames, closedDate: now } });
     // Preserve CC users' read receipts — close action doesn't need to re-alert observers
@@ -248,8 +284,11 @@ async function acknowledge(reqId, user, body) {
 
     if (normalizedStatus === "Resolved") {
       const dateStr = now.toLocaleDateString("en-IN");
-      updateData = { acknowledgement: "Resolved", acknowledgedAt: now, isClosed: true, assignedStatus: `${dateStr} (Closed)` };
-      chatText = "✅ Requestor confirmed — ticket is now officially resolved and closed.";
+      const nextDate = existing.isRecurring ? computeNextRecurringDate(existing.recurringInterval) : null;
+      updateData = { acknowledgement: "Resolved", acknowledgedAt: now, isClosed: true, assignedStatus: `${dateStr} (Closed)`, nextRecurringDate: nextDate };
+      chatText = existing.isRecurring && nextDate
+        ? `✅ Requestor confirmed — ticket resolved. 🔁 Will auto-reopen on ${nextDate.toLocaleDateString("en-IN")} for the next recurring cycle.`
+        : "✅ Requestor confirmed — ticket is now officially resolved and closed.";
     } else {
       // Not Resolved: reopen the ticket and reset all approval fields
       // (chat messages are kept — full history preserved)
@@ -301,8 +340,9 @@ async function attachAfterClose(reqId, user, uploadedFiles, req) {
     const files = Array.isArray(uploadedFiles) ? uploadedFiles : (uploadedFiles ? [uploadedFiles] : []);
     if (!files.length) throw Object.assign(new Error("No files provided."), { status: 400 });
 
-    const newUrls  = files.map(f => buildFileUrl(req, f.filename));
-    const newNames = files.map(f => f.originalname);
+    const newStored = await storeFiles(req, files);
+    const newUrls  = newStored.map(s => s.url);
+    const newNames = newStored.map(s => s.name);
 
     // System summary message
     await prisma.chatMessage.create({
@@ -322,12 +362,18 @@ async function attachAfterClose(reqId, user, uploadedFiles, req) {
   }
 
 async function stopRecurring(reqId, user) {
-    if (user.role !== "DeptHOD") throw Object.assign(new Error("Only DeptHOD can stop recurring."), { status: 403 });
-
     const existing = await prisma.request.findUnique({ where: { id: reqId } });
     if (!existing) throw Object.assign(new Error("Request not found."), { status: 404 });
     if (!existing.isRecurring) throw Object.assign(new Error("This request is not recurring."), { status: 400 });
-    if (existing.assignedDept !== user.dept) throw Object.assign(new Error("Unauthorized — not your assigned dept."), { status: 403 });
+
+    // Authorized roles:
+    // 1. DeptHOD of the assigned dept
+    // 2. RM or HOD of the requestor's own dept
+    const isAssignedDeptHOD  = user.role === "DeptHOD" && existing.assignedDept === user.dept;
+    const isRequestorDeptStaff = (user.role === "RM" || user.role === "HOD") && existing.dept === user.dept;
+    if (!isAssignedDeptHOD && !isRequestorDeptStaff) {
+      throw Object.assign(new Error("Not authorized to stop recurring."), { status: 403 });
+    }
 
     const updated = await prisma.request.update({
       where: { id: reqId },
@@ -342,7 +388,7 @@ async function stopRecurring(reqId, user) {
         author:    user.name,
         role:      user.role,
         type:      "system",
-        text:      `🔁 Recurring schedule stopped by ${user.name} (Dept HOD — ${user.dept}). No further auto-requests will be created.`,
+        text:      `🔁 Recurring schedule stopped by ${user.name} (${user.role} — ${user.dept}). No further auto-reopening will occur.`,
       },
     });
 

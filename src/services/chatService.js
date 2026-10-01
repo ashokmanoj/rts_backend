@@ -9,17 +9,12 @@
 
 const prisma   = require("../config/database");
 const presence = require("../utils/presenceService");
+const { storeFile } = require("./request/helpers");
 
 const toDate = (d) => new Date(d).toLocaleDateString("en-IN");
 const toTime = (d) => new Date(d).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
 
 class ChatService {
-  buildFileUrl(req, filename) {
-    if (!filename) return null;
-    const base = process.env.SERVER_URL ? process.env.SERVER_URL.replace(/\/$/, "") : `${req.protocol}://${req.get("host")}`;
-    return `${base}/api/files/${filename}`;
-  }
-
   async getMessages(requestId, viewerEmpId) {
     const [messages, chatReads] = await Promise.all([
       prisma.chatMessage.findMany({
@@ -80,14 +75,14 @@ class ChatService {
     };
 
     if (uploadedFile) {
-      const url = this.buildFileUrl(req, uploadedFile.filename);
+      const { url } = await storeFile(req, uploadedFile);
       if (isVoice) {
         data.voiceUrl = url;
         data.duration = duration;
       } else {
-        data.fileUrl = url;
+        data.fileUrl  = url;
         data.fileName = uploadedFile.originalname;
-        data.isImage = isImage;
+        data.isImage  = isImage;
       }
     }
 

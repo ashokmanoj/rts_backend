@@ -2,14 +2,14 @@
 
 const prisma = require("../../config/database");
 const { formatRequest } = require("../../utils/formatters");
-const { WITH_OWNER, buildFileUrl, computeNextRecurringDate } = require("./helpers");
+const { WITH_OWNER, storeFiles, computeNextRecurringDate } = require("./helpers");
 const { sendNewRequestNotification } = require("../../utils/pushService");
 
 async function create(user, data, uploadedFiles, req) {
     const { purpose, description, assignedDept, assignedDepts, dueDate, assignedPersonEmpId, assignedPersonName, ccDepts, ccEmpIds, ccPersonNames, isRecurring, recurringInterval, threadParentId } = data;
 
     const files = Array.isArray(uploadedFiles) ? uploadedFiles : (uploadedFiles ? [uploadedFiles] : []);
-    const first = files[0] ?? null;
+    const stored = await storeFiles(req, files);
 
     const recurring = isRecurring === true || isRecurring === "true";
     const nextDate  = recurring ? computeNextRecurringDate(recurringInterval) : null;
@@ -30,10 +30,10 @@ async function create(user, data, uploadedFiles, req) {
         empId:               user.empId,
         purpose,
         description:         description || "",
-        fileUrl:             first ? buildFileUrl(req, first.filename) : null,
-        fileName:            first ? first.originalname : null,
-        fileUrls:            files.length > 0 ? JSON.stringify(files.map(f => buildFileUrl(req, f.filename))) : null,
-        fileNames:           files.length > 0 ? JSON.stringify(files.map(f => f.originalname)) : null,
+        fileUrl:             stored[0]?.url  ?? null,
+        fileName:            stored[0]?.name ?? null,
+        fileUrls:            stored.length > 0 ? JSON.stringify(stored.map(s => s.url))  : null,
+        fileNames:           stored.length > 0 ? JSON.stringify(stored.map(s => s.name)) : null,
         dept:                user.dept,
         assignedDept:        (Array.isArray(assignedDept) ? assignedDept[0] : assignedDept) || user.dept,
         assignedDepts:       (Array.isArray(assignedDepts) ? assignedDepts[0] : assignedDepts) || null,
@@ -92,6 +92,7 @@ async function editRequest(reqId, user, body, uploadedFiles = [], req) {
     // Append new uploaded files to existing ones
     const files = Array.isArray(uploadedFiles) ? uploadedFiles : (uploadedFiles ? [uploadedFiles] : []);
     if (files.length > 0) {
+      const newStored = await storeFiles(req, files);
       let existingUrls = [];
       let existingNames = [];
       if (existing.fileUrls) {
@@ -104,10 +105,8 @@ async function editRequest(reqId, user, body, uploadedFiles = [], req) {
       } else if (existing.fileName) {
         existingNames = [existing.fileName];
       }
-      const newUrls  = files.map(f => buildFileUrl(req, f.filename));
-      const newNames = files.map(f => f.originalname || f.filename);
-      const allUrls  = [...existingUrls,  ...newUrls];
-      const allNames = [...existingNames, ...newNames];
+      const allUrls  = [...existingUrls,  ...newStored.map(s => s.url)];
+      const allNames = [...existingNames, ...newStored.map(s => s.name)];
       updateData.fileUrl   = allUrls[0];
       updateData.fileName  = allNames[0];
       updateData.fileUrls  = JSON.stringify(allUrls);

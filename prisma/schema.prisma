@@ -262,6 +262,17 @@ model ChatMessage {
   @@map("chat_messages")
 }
 
+model StoredFile {
+  id        String   @id @default(uuid())
+  fileName  String   @map("file_name")
+  mimeType  String?  @map("mime_type")
+  size      Int      @default(0)
+  data      Bytes
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("stored_files")
+}
+
 model Department {
   id        Int      @id @default(autoincrement())
   name      String   @unique

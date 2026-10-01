@@ -1,7 +1,7 @@
 "use strict";
 
 const prisma = require("../../config/database");
-const { buildFileUrl, stripHtml } = require("./helpers");
+const { storeFiles, stripHtml } = require("./helpers");
 const { sendPushToUser } = require("../../utils/pushService");
 
 async function broadcastUsers(user) {
@@ -82,11 +82,11 @@ async function broadcastSend(user, body, uploadedFiles = [], req) {
 
     const now   = new Date();
     const files = Array.isArray(uploadedFiles) ? uploadedFiles : (uploadedFiles ? [uploadedFiles] : []);
-    const first = files[0] ?? null;
-    const fUrl   = first ? buildFileUrl(req, first.filename)                             : null;
-    const fName  = first ? first.originalname                                                  : null;
-    const fUrls  = files.length > 0 ? JSON.stringify(files.map(f => buildFileUrl(req, f.filename))) : null;
-    const fNames = files.length > 0 ? JSON.stringify(files.map(f => f.originalname))         : null;
+    const stored = await storeFiles(req, files);
+    const fUrl   = stored[0]?.url  ?? null;
+    const fName  = stored[0]?.name ?? null;
+    const fUrls  = stored.length > 0 ? JSON.stringify(stored.map(s => s.url))  : null;
+    const fNames = stored.length > 0 ? JSON.stringify(stored.map(s => s.name)) : null;
 
     // Save exactly ONE record — the sender's copy — so the broadcaster sees it in their list
     const broadcast = await prisma.request.create({

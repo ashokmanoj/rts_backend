@@ -2,19 +2,8 @@
 
 const cron   = require("node-cron");
 const prisma = require("../config/database");
+const { computeNextRecurringDate } = require("../services/request/helpers");
 const { sendNewRequestNotification } = require("./pushService");
-
-function computeNextRecurringDate(interval) {
-  const d = new Date();
-  switch (interval) {
-    case "1m":  d.setMonth(d.getMonth() + 1);       break;
-    case "4m":  d.setMonth(d.getMonth() + 4);       break;
-    case "6m":  d.setMonth(d.getMonth() + 6);       break;
-    case "1y":  d.setFullYear(d.getFullYear() + 1); break;
-    default: return null;
-  }
-  return d;
-}
 
 let recurringJobRunning = false;
 
@@ -34,56 +23,80 @@ async function runRecurringJob() {
 async function _runRecurringJob() {
   const now = new Date();
 
+  // Find closed recurring tickets whose nextRecurringDate has passed — time to reopen them
   const due = await prisma.request.findMany({
     where: {
-      isRecurring:        true,
-      isClosed:           false,
-      nextRecurringDate:  { lte: now },
+      isRecurring:       true,
+      isClosed:          true,
+      nextRecurringDate: { lte: now },
     },
     include: { owner: true },
   });
 
   if (!due.length) return;
-  console.log(`🔁 Recurring cron: ${due.length} request(s) due`);
+  console.log(`🔁 Recurring cron: ${due.length} ticket(s) due for auto-reopen`);
 
   for (const r of due) {
     try {
-      const next = computeNextRecurringDate(r.recurringInterval);
+      const reopenedAt = new Date();
 
-      // Create a fresh child request (not itself recurring — the parent drives the schedule)
-      const child = await prisma.request.create({
-        data: {
-          empId:               r.empId,
-          purpose:             r.purpose,
-          description:         r.description,
-          dept:                r.dept,
-          assignedDept:        r.assignedDept,
-          assignedDepts:       r.assignedDepts,
-          requestorRole:       r.requestorRole,
-          fileUrl:             r.fileUrl,
-          fileName:            r.fileName,
-          fileUrls:            r.fileUrls,
-          fileNames:           r.fileNames,
-          assignedPersonEmpId: r.assignedPersonEmpId,
-          assignedPersonName:  r.assignedPersonName,
-          recurringParentId:   r.recurringParentId ?? r.id,
-          readReceipts:        { create: { empId: r.empId } },
-        },
-        include: { owner: true },
-      });
-
-      // Push the parent's next trigger date forward
+      // Reset all approval fields and reopen the same ticket
       await prisma.request.update({
         where: { id: r.id },
-        data:  { nextRecurringDate: next },
+        data: {
+          isClosed:          false,
+          assignedStatus:    "Open",
+          acknowledgement:   null,
+          acknowledgedAt:    null,
+          resolvedDate:      null,
+          resolvedBy:        null,
+          reopenedAt:        reopenedAt,
+          nextRecurringDate: null,        // cleared — will be set again on next acknowledgement
+          rmStatus:          "--",
+          rmDate:            null,
+          hodStatus:         "--",
+          hodDate:           null,
+          deptHodStatus:     "--",
+          deptHodDate:       null,
+          assignedRmStatus:  "--",
+          assignedRmDate:    null,
+          assignedHodStatus: "--",
+          assignedHodDate:   null,
+          managementStatus:  "--",
+          managementDate:    null,
+          checkingBy:        null,
+          checkingDeadline:  null,
+          checkingReason:    null,
+        },
       });
 
-      // Notify RM/HOD/DeptHOD for the new child request (non-blocking)
-      sendNewRequestNotification(child).catch(() => {});
+      // Remove old close ticket data
+      await prisma.closeTicket.deleteMany({ where: { requestId: r.id } });
 
-      console.log(`  ✅ Created child #${child.id} from parent #${r.id} — next: ${next?.toISOString()}`);
+      // Clear read receipts so it appears unread / at the top for all approvers
+      await prisma.requestRead.deleteMany({ where: { requestId: r.id } });
+      // Restore a read receipt for the requestor so they don't see it as new-to-them
+      await prisma.requestRead.create({ data: { requestId: r.id, empId: r.empId } });
+
+      // Add a system chat message
+      await prisma.chatMessage.create({
+        data: {
+          requestId: r.id,
+          authorId:  r.empId,
+          author:    "System",
+          role:      "System",
+          type:      "system",
+          text:      `🔁 Recurring ticket auto-reopened on ${reopenedAt.toLocaleDateString("en-IN")}. Approval cycle restarted.`,
+        },
+      });
+
+      // Re-fetch with owner to send notification
+      const reopened = await prisma.request.findUnique({ where: { id: r.id }, include: { owner: true } });
+      sendNewRequestNotification(reopened).catch(() => {});
+
+      console.log(`  ✅ Auto-reopened #${r.id} (recurring ${r.recurringInterval})`);
     } catch (err) {
-      console.error(`  ❌ Failed to recur request #${r.id}:`, err.message);
+      console.error(`  ❌ Failed to reopen recurring ticket #${r.id}:`, err.message);
     }
   }
 }
