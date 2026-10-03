@@ -60,14 +60,16 @@ async function approval(reqId, user, body) {
         checkingBy:         null,  checkingDeadline: null, checkingReason: null,
         assignedStatus:     "Open",
       };
-      // Record the forwarder's own status so their column shows "Forwarded" rather than "--".
+      // Record the forwarder's own status so their column shows the correct status.
+      // Approve+Forward (dualDept=true) → "Approved"; plain Forward → "Forwarded".
       // Only applies when the forwarder is from the requestor's dept (not the assigned dept);
       // assigned-dept RM/HOD fields are now reserved for the receiving dept's fresh use.
       if (user.role === "RM" || user.role === "HOD") {
         const isFromAssignedDept = user.dept === existing.assignedDept && user.dept !== existing.dept;
         if (!isFromAssignedDept) {
-          if (user.role === "RM") { updateData.rmStatus = "Forwarded"; updateData.rmDate = now; }
-          else                    { updateData.hodStatus = "Forwarded"; updateData.hodDate = now; }
+          const statusVal = body.dualDept ? "Approved" : "Forwarded";
+          if (user.role === "RM") { updateData.rmStatus = statusVal; updateData.rmDate = now; }
+          else                    { updateData.hodStatus = statusVal; updateData.hodDate = now; }
         }
       }
     } else if (["RM", "HOD", "DeptHOD", "Management"].includes(user.role)) {
