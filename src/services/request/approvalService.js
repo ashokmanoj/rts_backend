@@ -256,8 +256,8 @@ async function close(reqId, user, body, uploadedFiles, req) {
 
     const plainNote = stripHtml(note);
     const closureText = plainNote
-      ? `🔒 Resolution submitted by ${user.name} (${user.dept}) — awaiting requestor acknowledgement.\n\nResolution note: ${plainNote}`
-      : `🔒 Resolution submitted by ${user.name} (${user.dept}) — awaiting requestor acknowledgement.`;
+      ? `🔒 Resolution submitted by ${user.dept} — awaiting requestor acknowledgement.\n\nResolution note: ${plainNote}`
+      : `🔒 Resolution submitted by ${user.dept} — awaiting requestor acknowledgement.`;
     await prisma.chatMessage.create({ data: { requestId: reqId, authorId: user.empId, author: user.name, role: user.role, type: "system", text: closureText, fileUrl: fUrl, fileName: fName, isImage: isImg } });
 
     return formatRequest(updated, user.empId);

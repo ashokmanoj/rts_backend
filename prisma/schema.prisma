@@ -69,6 +69,7 @@ model User {
   readReceipts      RequestRead[]
   chatReads         ChatRead[]
   loginLogs         LoginLog[]
+  appSessions       AppSession[]
   foodSubscription  FoodSubscription?
   foodCancellations FoodCancellation[]
   foodManualEntries FoodManualEntry[]
@@ -103,6 +104,20 @@ model LoginLog {
 
   @@index([empId])
   @@map("login_logs")
+}
+
+model AppSession {
+  id        Int      @id @default(autoincrement())
+  empId     String   @map("emp_id")
+  date      String   // "YYYY-MM-DD" — one row per user per day
+  lastPing  DateTime @map("last_ping")
+  platform  String   @default("mobile")
+
+  user      User     @relation(fields: [empId], references: [empId], onDelete: Cascade)
+
+  @@unique([empId, date])
+  @@index([date])
+  @@map("app_sessions")
 }
 
 model Request {
