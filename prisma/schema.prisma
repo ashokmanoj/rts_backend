@@ -107,13 +107,16 @@ model LoginLog {
 }
 
 model AppSession {
-  id        Int      @id @default(autoincrement())
-  empId     String   @map("emp_id")
-  date      String   // "YYYY-MM-DD" — one row per user per day
-  lastPing  DateTime @map("last_ping")
-  platform  String   @default("mobile")
+  id         Int      @id @default(autoincrement())
+  empId      String   @map("emp_id")
+  date       String   // "YYYY-MM-DD" — one row per user per day
+  platform     String   @default("mobile")
+  versionName  String   @default("") @map("version_name")
+  appVersion   Int      @default(0) @map("app_version")
+  lastPing   DateTime @map("last_ping")
+  
 
-  user      User     @relation(fields: [empId], references: [empId], onDelete: Cascade)
+  user       User     @relation(fields: [empId], references: [empId], onDelete: Cascade)
 
   @@unique([empId, date])
   @@index([date])
