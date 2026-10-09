@@ -188,4 +188,21 @@ async function getDauByDate(req, res, next) {
   }
 }
 
-module.exports = { ping, getDau, getDauByDate };
+/**
+ * GET /api/analytics/has-app
+ * Returns whether the current user has ever pinged from the mobile app.
+ * Used by the frontend to hide the "App Available" install prompt once installed.
+ */
+async function hasApp(req, res, next) {
+  try {
+    const empId = req.user?.empId;
+    if (!empId) return res.status(401).json({ error: "Invalid token." });
+
+    const session = await prisma.appSession.findFirst({ where: { empId } });
+    return res.json({ hasApp: !!session });
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports = { ping, getDau, getDauByDate, hasApp };

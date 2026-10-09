@@ -29,7 +29,7 @@ function formatRequest(row, viewerEmpId) {
     time:           new Date(row.createdAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }),
     empId:          row.empId,
     name:           row.owner?.name        ?? row.empId,
-    dept:           row.owner?.dept        ?? row.dept,
+    dept:           row.dept               ?? row.owner?.dept,
     designation:    row.owner?.designation ?? "—",
     location:       row.owner?.location   ?? "—",
     purpose:        row.purpose,
