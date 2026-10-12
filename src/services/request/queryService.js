@@ -257,33 +257,15 @@ async function getAll(user, query) {
     if (Object.keys(searchFilter).length > 0) andClauses.push(searchFilter);
     const where = { AND: andClauses.filter(f => Object.keys(f).length > 0) };
 
-    // Default sort: unread tickets for this user float to the top, then newest first.
-    // Uses two queries so unread-first works correctly across pagination pages.
+    // Default sort: newest ticket first (by id/date). Unread dots stay visible on rows
+    // but do not affect sort order — user must explicitly choose a sort to reorder.
     if (!sortOrder || sortOrder === "default") {
-      const unreadWhere = { AND: [...andClauses.filter(f => Object.keys(f).length > 0), { readReceipts: { none: { empId } } }] };
-      const readWhere   = { AND: [...andClauses.filter(f => Object.keys(f).length > 0), { readReceipts: { some: { empId } } }] };
-      const dateOrder   = [{ createdAt: "desc" }];
-
-      const [unreadTotal, readTotal] = await Promise.all([
-        prisma.request.count({ where: unreadWhere }),
-        prisma.request.count({ where: readWhere }),
+      console.log("[queryService] default sort → createdAt desc, sortOrder=", sortOrder);
+      const [requests, total] = await Promise.all([
+        prisma.request.findMany({ where, include: WITH_OWNER, orderBy: [{ createdAt: "desc" }], skip, take }),
+        prisma.request.count({ where }),
       ]);
-      const total = unreadTotal + readTotal;
-
-      let rows = [];
-      if (skip < unreadTotal) {
-        const unreadTake = Math.min(take, unreadTotal - skip);
-        const unreadRows = await prisma.request.findMany({ where: unreadWhere, include: WITH_OWNER, orderBy: dateOrder, skip, take: unreadTake });
-        rows.push(...unreadRows);
-        if (rows.length < take) {
-          const readRows = await prisma.request.findMany({ where: readWhere, include: WITH_OWNER, orderBy: dateOrder, skip: 0, take: take - rows.length });
-          rows.push(...readRows);
-        }
-      } else {
-        rows = await prisma.request.findMany({ where: readWhere, include: WITH_OWNER, orderBy: dateOrder, skip: skip - unreadTotal, take });
-      }
-
-      return buildPageResponse(await addUnreadChatCounts(rows, empId), total, page, limit);
+      return buildPageResponse(await addUnreadChatCounts(requests, empId), total, page, limit);
     }
 
     const order = sortOrder === "asc" ? "asc" : "desc";

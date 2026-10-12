@@ -107,6 +107,9 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Disable ETags for all API routes — prevents stale 304 responses when data changes
+app.use("/api", (_req, res, next) => { res.set("Cache-Control", "no-store"); next(); });
+
 // ── API routes ────────────────────────────────────────────────────────────────
 app.use("/api/auth",       authRoutes);
 app.use("/api/requests",   requestRoutes);
