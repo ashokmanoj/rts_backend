@@ -260,7 +260,6 @@ async function getAll(user, query) {
     // Default sort: newest ticket first (by id/date). Unread dots stay visible on rows
     // but do not affect sort order — user must explicitly choose a sort to reorder.
     if (!sortOrder || sortOrder === "default") {
-      console.log("[queryService] default sort → createdAt desc, sortOrder=", sortOrder);
       const [requests, total] = await Promise.all([
         prisma.request.findMany({ where, include: WITH_OWNER, orderBy: [{ createdAt: "desc" }], skip, take }),
         prisma.request.count({ where }),
