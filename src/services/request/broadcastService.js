@@ -97,6 +97,9 @@ async function broadcastSend(user, body, uploadedFiles = [], req) {
         dept:                user.dept,
         requestorRole:       "broadcast",
         isClosed:            true,
+        // Broadcasts are informational — closed on creation, no requestor acknowledgement step
+        acknowledgement:     "Resolved",
+        acknowledgedAt:      now,
         resolvedDate:        now,
         resolvedBy:          `${user.name} (Broadcast)`,
         assignedStatus:      "Broadcast",

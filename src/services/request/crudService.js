@@ -25,6 +25,16 @@ async function create(user, data, uploadedFiles, req) {
       if (parent?.threadParentId) resolvedThreadParentId = parent.threadParentId;
     }
 
+    // Requestor who is also HOD of their own dept → requestor-dept RM + HOD steps are auto-approved
+    const isOwnDeptHod = user.role === "HOD" || !!(await prisma.userRole.findFirst({
+      where:  { empId: user.empId, role: "HOD", dept: user.dept, isActive: true },
+      select: { id: true },
+    }));
+    const now = new Date();
+    const autoApproval = isOwnDeptHod
+      ? { rmStatus: "Approved", rmDate: now, hodStatus: "Approved", hodDate: now }
+      : {};
+
     const request = await prisma.request.create({
       data: {
         empId:               user.empId,
@@ -50,9 +60,28 @@ async function create(user, data, uploadedFiles, req) {
         nextRecurringDate:   nextDate,
         threadParentId:      resolvedThreadParentId,
         readReceipts:        { create: { empId: user.empId } },
+        ...autoApproval,
       },
       include: WITH_OWNER,
     });
+
+    if (isOwnDeptHod) {
+      await prisma.chatMessage.create({
+        data: {
+          requestId:    request.id,
+          authorId:     user.empId,
+          author:       user.name,
+          role:         "HOD",
+          dept:         user.dept,
+          type:         "approval",
+          text:         `Auto-approved — requestor is HOD of ${user.dept} (RM + HOD).`,
+          status:       "Approved",
+          purpose:      request.purpose,
+          changedDept:  null,
+          originalDept: request.assignedDept,
+        },
+      });
+    }
 
     // Fire push notifications to RM, HOD, DeptHOD (non-blocking)
     sendNewRequestNotification(request).catch(() => {});

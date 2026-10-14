@@ -257,26 +257,35 @@ async function getAll(user, query) {
     if (Object.keys(searchFilter).length > 0) andClauses.push(searchFilter);
     const where = { AND: andClauses.filter(f => Object.keys(f).length > 0) };
 
-    // Default sort: newest ticket first (by id/date). Unread dots stay visible on rows
-    // but do not affect sort order — user must explicitly choose a sort to reorder.
-    if (!sortOrder || sortOrder === "default") {
-      const [requests, total] = await Promise.all([
-        prisma.request.findMany({ where, include: WITH_OWNER, orderBy: [{ createdAt: "desc" }], skip, take }),
+    // Default sort: newest ticket first. Unread dots stay visible on rows but do not
+    // affect sort order — user must explicitly choose a sort to reorder.
+    // id is the tie-breaker so paging stays stable when createdAt values are equal.
+    const order   = sortOrder === "asc" ? "asc" : "desc";
+    const orderBy = [{ createdAt: order }, { id: order }];
+
+    // "unread" sort: tickets this user hasn't opened come first, then the rest (newest first in each group).
+    // Paged across the two groups so page boundaries stay correct.
+    if (sortOrder === "unread") {
+      const unreadWhere = { AND: [...where.AND, { readReceipts: { none: { empId } } }] };
+      const readWhere   = { AND: [...where.AND, { readReceipts: { some: { empId } } }] };
+      const [unreadTotal, total] = await Promise.all([
+        prisma.request.count({ where: unreadWhere }),
         prisma.request.count({ where }),
       ]);
+      const requests = skip < unreadTotal
+        ? await prisma.request.findMany({ where: unreadWhere, include: WITH_OWNER, orderBy, skip, take })
+        : [];
+      const remaining = take - requests.length;
+      if (remaining > 0) {
+        requests.push(...await prisma.request.findMany({
+          where: readWhere, include: WITH_OWNER, orderBy, skip: Math.max(0, skip - unreadTotal), take: remaining,
+        }));
+      }
       return buildPageResponse(await addUnreadChatCounts(requests, empId), total, page, limit);
     }
 
-    const order = sortOrder === "asc" ? "asc" : "desc";
-
     const [requests, total] = await Promise.all([
-      prisma.request.findMany({
-        where,
-        include:  WITH_OWNER,
-        orderBy:  [{ createdAt: order }],
-        skip,
-        take,
-      }),
+      prisma.request.findMany({ where, include: WITH_OWNER, orderBy, skip, take }),
       prisma.request.count({ where }),
     ]);
 
